@@ -17,6 +17,7 @@ export type Settings = {
   providerRouting: "single" | "hybrid";
   experimentalImage: boolean;
   theme: "light" | "dark" | "system";
+  apiKey: string;
 };
 
 export type AuthState = {
@@ -46,11 +47,12 @@ type Action =
 // ── Initial state ──────────────────────────────────────────────────────────
 
 const defaultSettings: Settings = {
-  workspaceName: "VibesAI Workspace",
+  workspaceName: "My Workspace",
   outputStyle: "clean",
   providerRouting: "single",
   experimentalImage: false,
   theme: "system",
+  apiKey: "",
 };
 
 const defaultAuth: AuthState = {

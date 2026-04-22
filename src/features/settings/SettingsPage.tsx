@@ -1,9 +1,11 @@
+import { useState } from "react";
 import { GlassPanel } from "../../components/GlassPanel";
 import { useAppDispatch, useSettings, type Settings } from "../../store/AppContext";
 
 export function SettingsPage() {
   const settings = useSettings();
   const dispatch = useAppDispatch();
+  const [showKey, setShowKey] = useState(false);
 
   const update = (patch: Partial<Settings>) =>
     dispatch({ type: "SETTINGS_UPDATE", patch });
@@ -53,6 +55,35 @@ export function SettingsPage() {
 
       <GlassPanel title="Advanced">
         <div className="form-grid">
+          <label>
+            OpenAI API Key
+            <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
+              <input
+                type={showKey ? "text" : "password"}
+                placeholder="sk-..."
+                value={settings.apiKey}
+                onChange={(e) => update({ apiKey: e.target.value })}
+                autoComplete="off"
+                spellCheck={false}
+                style={{ flex: 1 }}
+              />
+              <button
+                type="button"
+                className="text-button"
+                onClick={() => setShowKey((v) => !v)}
+                style={{ flexShrink: 0 }}
+              >
+                {showKey ? "Hide" : "Show"}
+              </button>
+            </div>
+            <p className="input-hint">
+              Get your key at{" "}
+              <a href="https://platform.openai.com/api-keys" target="_blank" rel="noreferrer">
+                platform.openai.com
+              </a>
+              . Stored locally in your browser only.
+            </p>
+          </label>
           <label>
             Provider routing
             <select

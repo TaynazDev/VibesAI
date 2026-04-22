@@ -1,6 +1,5 @@
 import { PropsWithChildren } from "react";
 import { Dock } from "../components/Dock";
-import { PrismSuiteLogo } from "../components/BrandLogo";
 
 export function AppShell({ children }: PropsWithChildren) {
   return (
@@ -13,8 +12,7 @@ export function AppShell({ children }: PropsWithChildren) {
         </main>
       </div>
       <footer className="app-footer">
-        <PrismSuiteLogo className="footer-prism-logo" />
-        <span>VibesAI by Prism</span>
+        <span>VibesAI</span>
       </footer>
     </div>
   );

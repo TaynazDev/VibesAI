@@ -13,32 +13,5 @@ export type AppNotification = {
   unread: boolean;
 };
 
-export const mockProjects: Project[] = [
-  { id: "p1", name: "Launch Storyboard", updatedAt: "2m ago", status: "Active" },
-  { id: "p2", name: "Landing Copy Variants", updatedAt: "35m ago", status: "Draft" },
-  { id: "p3", name: "Style Exploration", updatedAt: "1d ago", status: "Archived" }
-];
-
-export const mockNotifications: AppNotification[] = [
-  {
-    id: "n1",
-    title: "Render complete",
-    detail: "Your image generation task finished for Launch Storyboard.",
-    timestamp: "Now",
-    unread: true
-  },
-  {
-    id: "n2",
-    title: "Suggestion ready",
-    detail: "Refactor suggestions were generated for your draft.",
-    timestamp: "10m",
-    unread: true
-  },
-  {
-    id: "n3",
-    title: "Sync successful",
-    detail: "Project library synced across devices.",
-    timestamp: "1h",
-    unread: false
-  }
-];
+export const mockProjects: Project[] = [];
+export const mockNotifications: AppNotification[] = [];

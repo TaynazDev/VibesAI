@@ -1,9 +1,10 @@
-// Mock AI service — swap callFn bodies for real API calls when ready.
+// Real AI service — calls OpenAI APIs directly via fetch.
+// API key is stored in localStorage via the app's settings state.
 
 export type AIMode = "Generate" | "Refactor" | "Image";
 
 export type AIOptions = {
-  creativity: number;        // 0–100
+  creativity: number;   // 0–100 → temperature 0–1
   length: "concise" | "balanced" | "expanded";
   references: boolean;
 };
@@ -12,91 +13,97 @@ export type AITextResult = { type: "text"; content: string; wordCount: number };
 export type AIImageResult = { type: "image"; url: string; alt: string };
 export type AIResult = AITextResult | AIImageResult;
 
-const delay = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+const STORAGE_KEY = "vibesai_state_v1";
 
-const charLimitByLength = { concise: 600, balanced: 1400, expanded: 2800 };
-
-function buildGenerate(prompt: string, opts: AIOptions): string {
-  const topic = prompt.trim().split(/\s+/).slice(0, 6).join(" ");
-  const tone =
-    opts.creativity > 70 ? "exploratory and imaginative" :
-    opts.creativity < 30 ? "precise and structured" :
-    "clear and balanced";
-
-  return [
-    `# ${topic.charAt(0).toUpperCase() + topic.slice(1)}`,
-    "",
-    `> Generated with a **${tone}** tone — ${opts.length} depth.`,
-    "",
-    "## Overview",
-    "",
-    prompt.length > 10
-      ? prompt
-      : "Your idea has been expanded into a structured output.",
-    "",
-    "## Key Points",
-    "",
-    "- Clarity leads the structure, supporting detail reinforces the main idea",
-    "- Tone is calibrated to your chosen creativity level",
-    opts.references
-      ? "- References and context provided where relevant"
-      : "- Self-contained output — no external dependencies",
-    "",
-    opts.length !== "concise"
-      ? [
-          `## ${opts.length === "expanded" ? "Extended Analysis" : "Summary"}`,
-          "",
-          "This output was generated using a mock provider. Connect a real API key in Settings → Advanced to get full AI-powered results. The interface, parameters, and result format will stay exactly the same.",
-        ].join("\n")
-      : "",
-  ]
-    .filter((line) => line !== null)
-    .join("\n")
-    .slice(0, charLimitByLength[opts.length]);
+function getApiKey(): string {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return "";
+    const state = JSON.parse(raw) as { settings?: { apiKey?: string } };
+    return state?.settings?.apiKey?.trim() ?? "";
+  } catch {
+    return "";
+  }
 }
 
-function buildRefactor(prompt: string): string {
-  return [
-    "## Refactored Version",
-    "",
-    "**Original intent preserved.** The following improvements were applied:",
-    "",
-    "### Changes Made",
-    "1. Tightened opening phrasing for directness",
-    "2. Replaced passive voice with active constructions",
-    "3. Grouped related ideas into cohesive paragraphs",
-    "4. Removed redundant qualifiers",
-    "",
-    "### Revised Output",
-    "",
-    prompt.length > 20
-      ? `${prompt.slice(0, 200).trim()}${prompt.length > 200 ? "…\n\n_[Full refactor available with a real API key connected in Settings → Advanced]_" : ""}`
-      : "Provide a longer prompt for a meaningful refactor suggestion.",
-  ].join("\n");
-}
-
-function buildImageUrl(prompt: string): string {
-  // Deterministic seed per prompt so the same prompt → same image preview
-  const seed =
-    Math.abs(
-      prompt
-        .split("")
-        .reduce((acc, c) => ((acc << 5) - acc + c.charCodeAt(0)) | 0, 0)
-    ) % 1000;
-  return `https://picsum.photos/seed/${seed}/900/520`;
-}
+const lengthSystemSuffix: Record<AIOptions["length"], string> = {
+  concise:  "Keep the response concise, under 200 words.",
+  balanced: "Aim for a balanced response, around 300–500 words.",
+  expanded: "Give a thorough, detailed response, at least 600 words.",
+};
 
 export async function runAI(
   mode: AIMode,
   prompt: string,
   opts: AIOptions
 ): Promise<AIResult> {
-  await delay(900 + Math.random() * 700);
+  const apiKey = getApiKey();
 
-  if (mode === "Image") {
-    return { type: "image", url: buildImageUrl(prompt), alt: prompt.slice(0, 80) };
+  if (!apiKey) {
+    throw new Error("NO_API_KEY");
   }
 
-  const content = mode === "Refactor" ? buildRefactor(prompt) : buildGenerate(prompt, opts);
-  return { type: "text", content, wordCount: content.split(/\s+/).filter(Boolean).length };
+  // ── Image (DALL-E 3) ──────────────────────────────────────────────
+  if (mode === "Image") {
+    const res = await fetch("https://api.openai.com/v1/images/generations", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model: "dall-e-3",
+        prompt: prompt.slice(0, 4000),
+        n: 1,
+        size: "1024x1024",
+        quality: "standard",
+      }),
+    });
+
+    const json = await res.json();
+    if (!res.ok) {
+      throw new Error(json?.error?.message ?? "Image generation failed.");
+    }
+
+    return {
+      type: "image",
+      url: json.data[0].url as string,
+      alt: prompt.slice(0, 80),
+    };
+  }
+
+  // ── Text (GPT-4o-mini) ────────────────────────────────────────────
+  const systemPrompt =
+    mode === "Refactor"
+      ? `You are an expert editor. Improve and refactor the user's content while preserving their original intent and voice. Format your response clearly. ${lengthSystemSuffix[opts.length]}`
+      : `You are a creative AI assistant. Generate high-quality, structured content based on the user's prompt. Use markdown formatting where appropriate. ${lengthSystemSuffix[opts.length]}${opts.references ? " Include relevant references and examples where helpful." : ""}`;
+
+  const res = await fetch("https://api.openai.com/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({
+      model: "gpt-4o-mini",
+      temperature: opts.creativity / 100,
+      max_tokens: opts.length === "concise" ? 400 : opts.length === "balanced" ? 900 : 1800,
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: prompt },
+      ],
+    }),
+  });
+
+  const json = await res.json();
+  if (!res.ok) {
+    throw new Error(json?.error?.message ?? "AI request failed.");
+  }
+
+  const content: string = json.choices[0].message.content ?? "";
+  return {
+    type: "text",
+    content,
+    wordCount: content.split(/\s+/).filter(Boolean).length,
+  };
 }
