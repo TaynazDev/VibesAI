@@ -1,5 +1,6 @@
 import { NavLink } from "react-router-dom";
 import { PrismSuiteLogo, VibesAiLogo } from "./BrandLogo";
+import { useNotifications } from "../store/AppContext";
 
 type DockItem = {
   label: string;
@@ -16,6 +17,8 @@ const items: DockItem[] = [
 ];
 
 export function Dock() {
+  const { unreadCount } = useNotifications();
+
   return (
     <aside className="dock glass" aria-label="Primary navigation">
       <div className="dock-brand">
@@ -31,7 +34,7 @@ export function Dock() {
       <nav>
         <ul className="dock-list">
           {items.map((item) => (
-            <li key={item.to}>
+            <li key={item.to} className="dock-link-wrap">
               <NavLink
                 to={item.to}
                 className={({ isActive }) =>
@@ -41,6 +44,11 @@ export function Dock() {
                 <span aria-hidden="true">{item.icon}</span>
                 <span>{item.label}</span>
               </NavLink>
+              {item.to === "/notifications" && unreadCount > 0 && (
+                <span className="nav-badge" aria-label={`${unreadCount} unread notifications`}>
+                  {unreadCount > 99 ? "99+" : unreadCount}
+                </span>
+              )}
             </li>
           ))}
         </ul>
