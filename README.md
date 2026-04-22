@@ -47,8 +47,8 @@ npm run build
 Place your provided logos in these exact paths:
 
 - public/branding/prism-suite-logo.png
-- public/branding/vibesai-logo-light.png
-- public/branding/vibesai-logo-dark.png
+- public/branding/vibesai-logo-light.jpg
+- public/branding/vibesai-logo-dark.jpg
 
 Behavior:
 

@@ -6,8 +6,8 @@ type BrandLogoProps = {
 export function VibesAiLogo({ className, alt = "VibesAI logo" }: BrandLogoProps) {
   return (
     <picture className={className}>
-      <source media="(prefers-color-scheme: dark)" srcSet="/branding/vibesai-logo-dark.png" />
-      <img src="/branding/vibesai-logo-light.png" alt={alt} />
+      <source media="(prefers-color-scheme: dark)" srcSet="/branding/vibesai-logo-dark.jpg" />
+      <img src="/branding/vibesai-logo-light.jpg" alt={alt} />
     </picture>
   );
 }
