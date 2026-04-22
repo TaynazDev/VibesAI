@@ -1,3 +1,5 @@
+https://taynazdev.github.io/VibesAI/
+
 # VibesAI (Prism Ecosystem)
 
 VibesAI is a streamlined, glassmorphic web interface focused on the core creator flow:
