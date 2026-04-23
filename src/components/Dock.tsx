@@ -10,12 +10,12 @@ const ITEMS = [
   { label: "Account",       to: "/account",       icon: "◌" },
 ];
 
-// Radius of the arc circle (matches the glass pill radius)
-const R = 125;
-// Equal vertical gap between item centers
-const ITEM_GAP = 56;
-// Angle step derived so arc y-spacing ≈ ITEM_GAP (arcsin(56/125) ≈ 27°)
-const THETA_STEP = 27 * (Math.PI / 180);
+// Gap in px between item centers along the dial
+const ITEM_GAP = 60;
+// Max px an item pulls back (leftward) from the active position's x
+const ARC_PULL = 26;
+// Degrees per step for computing the cosine x-pull
+const ARC_STEP = 22;
 
 function useIsDark(theme: "light" | "dark" | "system"): boolean {
   const [sysDark, setSysDark] = useState(
@@ -54,15 +54,16 @@ export function Dock() {
       <nav className="dial-items-layer" aria-label="Primary navigation">
         {ITEMS.map((item, i) => {
           const offset = i - activeIndex;
-          const theta = offset * THETA_STEP;
-          // True circular-arc: item sits on the circumference of the R=125 circle
-          const xPull = Math.round(R * (1 - Math.cos(theta)));
+          const angleRad = offset * ARC_STEP * (Math.PI / 180);
+          // How much this item is pulled back from the rightmost (active) point
+          const xPull = ARC_PULL * (1 - Math.cos(angleRad));
+          // Vertical offset from center
           const yOffset = offset * ITEM_GAP;
           const isActive = i === activeIndex;
-          // Fade items farther from center
+          // Fade out items farther from center
           const opacity = isActive
             ? 1
-            : Math.max(0.28, Math.cos(Math.abs(offset) * 32 * (Math.PI / 180)));
+            : Math.max(0.3, Math.cos(Math.abs(offset) * 28 * (Math.PI / 180)));
           const isNotif = item.to === "/notifications" && unreadCount > 0;
 
           return (

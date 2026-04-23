@@ -17,7 +17,16 @@ export type Settings = {
   providerRouting: "single" | "hybrid";
   experimentalImage: boolean;
   theme: "light" | "dark" | "system";
+  /** OpenAI API key */
   apiKey: string;
+  /** AI provider to use for text generation */
+  provider: "openai" | "openrouter" | "gemma";
+  /** OpenRouter API key */
+  openrouterKey: string;
+  /** OpenRouter model slug, e.g. "google/gemma-3-27b-it" */
+  openrouterModel: string;
+  /** Google AI Studio key for Gemma direct access */
+  gemmaKey: string;
 };
 
 export type AuthState = {
@@ -53,6 +62,10 @@ const defaultSettings: Settings = {
   experimentalImage: false,
   theme: "system",
   apiKey: "",
+  provider: "openai",
+  openrouterKey: "",
+  openrouterModel: "google/gemma-3-27b-it",
+  gemmaKey: "",
 };
 
 const defaultAuth: AuthState = {

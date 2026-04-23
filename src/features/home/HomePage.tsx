@@ -93,7 +93,10 @@ const COMING_SOON: { icon: string; title: string; desc: string }[] = [
 export function HomePage() {
   const dispatch = useAppDispatch();
   const settings = useSettings();
-  const hasApiKey = Boolean(settings.apiKey);
+  const hasApiKey =
+    (settings.provider === "openrouter" && Boolean(settings.openrouterKey)) ||
+    (settings.provider === "gemma" && Boolean(settings.gemmaKey)) ||
+    Boolean(settings.apiKey);
 
   const [prompt, setPrompt] = useState("");
   const [mode, setMode] = useState<AIMode>("Generate");
