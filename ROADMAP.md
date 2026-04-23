@@ -81,6 +81,12 @@ Save and reuse prompts.
 
 > Ideas that haven't been added to the UI yet. Add freely.
 
+- **Deploy to Web / App Store** — after the builder workflow finishes, let users publish their generated app directly
+  - Web deploy: upload the HTML file to a hosting provider (Netlify/Vercel via API, or GitHub Pages) and return a live URL
+  - Progressive Web App: inject a service worker + manifest into the generated HTML so it can be "installed" from a browser
+  - Mobile App Store: wrap the generated app in Capacitor/Cordova, build signed APK/IPA, upload to Google Play (via Burstable API) and App Store Connect (via App Store Connect API)
+  - Needs: server-side function to proxy deployment APIs (keys shouldn't be client-side), per-app domain/subdomain system, optional custom domain support
+
 - **Arc dial dock** — The left nav pill becomes a physical dial: the active item protrudes furthest right, items above/below curve back using cosine-based pullback. Navigating animates all items to new arc positions (spring easing). Feels like rotating a real dial.
   - Implementation: `useLocation` + index-based offset, `cos(offset * ARC_STEP)` for x-pull, `offset * ITEM_GAP` for y-offset, `transform: translate(xPull, yOffset)` on each button, spring transition `cubic-bezier(0.34, 1.56, 0.64, 1)`. The pill background is pushed `left: -58px` so only its right curved edge is visible.
   - Was partially implemented and reverted — see commit `f6bc5bd`

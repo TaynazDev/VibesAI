@@ -7,7 +7,7 @@ import {
   Dispatch,
 } from "react";
 import { mockNotifications, mockProjects } from "../data/mock";
-import type { AppNotification, Project } from "../data/mock";
+import type { AppNotification, Project, ProjectMessage } from "../data/mock";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -47,6 +47,7 @@ type Action =
   | { type: "PROJECT_ARCHIVE"; id: string }
   | { type: "PROJECT_RESTORE"; id: string }
   | { type: "PROJECT_DELETE"; id: string }
+  | { type: "PROJECT_ADD_MESSAGE"; id: string; message: Omit<ProjectMessage, "id"> }
   | { type: "NOTIFICATION_MARK_READ"; id: string }
   | { type: "NOTIFICATION_MARK_ALL_READ" }
   | { type: "NOTIFICATION_ADD"; notification: Omit<AppNotification, "id"> }
@@ -105,7 +106,7 @@ function reducer(state: AppState, action: Action): AppState {
       return {
         ...state,
         projects: [
-          { id: uid(), name: action.name, updatedAt: "just now", status: "Draft" },
+          { id: uid(), name: action.name, updatedAt: "just now", status: "Draft", messages: [] },
           ...state.projects,
         ],
       };
@@ -132,6 +133,15 @@ function reducer(state: AppState, action: Action): AppState {
       };
     case "PROJECT_DELETE":
       return { ...state, projects: state.projects.filter((p) => p.id !== action.id) };
+    case "PROJECT_ADD_MESSAGE":
+      return {
+        ...state,
+        projects: state.projects.map((p) =>
+          p.id === action.id
+            ? { ...p, updatedAt: "just now", messages: [{ ...action.message, id: uid() }, ...(p.messages ?? [])] }
+            : p
+        ),
+      };
     case "NOTIFICATION_MARK_READ":
       return {
         ...state,

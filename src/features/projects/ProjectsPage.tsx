@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { GlassPanel } from "../../components/GlassPanel";
 import { Modal } from "../../components/Modal";
 import { useAppDispatch, useProjects } from "../../store/AppContext";
@@ -6,6 +7,7 @@ import { useAppDispatch, useProjects } from "../../store/AppContext";
 export function ProjectsPage() {
   const projects = useProjects();
   const dispatch = useAppDispatch();
+  const navigate = useNavigate();
 
   const [query, setQuery] = useState("");
   const [showCreate, setShowCreate] = useState(false);
@@ -94,8 +96,16 @@ export function ProjectsPage() {
                     onDoubleClick={() => startRename(project.id, project.name)}
                     title="Double-click to rename"
                   >
-                    <strong>{project.name}</strong>
-                    <p>Updated {project.updatedAt}</p>
+                    <strong
+                      className="project-name-link"
+                      onClick={() => navigate(`/projects/${project.id}`)}
+                      role="button"
+                      tabIndex={0}
+                      onKeyDown={(e) => e.key === "Enter" && navigate(`/projects/${project.id}`)}
+                    >
+                      {project.name}
+                    </strong>
+                    <p>Updated {project.updatedAt}{project.messages?.length ? ` · ${project.messages.length} msg${project.messages.length !== 1 ? "s" : ""}` : ""}</p>
                   </div>
                 )}
 

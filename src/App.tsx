@@ -3,8 +3,9 @@ import { Navigate, Route, Routes } from "react-router-dom";
 import { AppShell } from "./app/AppShell";
 import { SplashScreen } from "./components/SplashScreen";
 import { AccountPage } from "./features/account/AccountPage";
-import { HomePage } from "./features/home/HomePage";
+import { BuildPage } from "./features/builder/BuildPage";
 import { NotificationsPage } from "./features/notifications/NotificationsPage";
+import { ProjectDetailPage } from "./features/projects/ProjectDetailPage";
 import { ProjectsPage } from "./features/projects/ProjectsPage";
 import { SettingsPage } from "./features/settings/SettingsPage";
 import { AppProvider } from "./store/AppContext";
@@ -26,8 +27,9 @@ function AppInner() {
   return (
     <AppShell>
       <Routes>
-        <Route path="/" element={<HomePage />} />
+        <Route path="/" element={<BuildPage />} />
         <Route path="/projects" element={<ProjectsPage />} />
+        <Route path="/projects/:id" element={<ProjectDetailPage />} />
         <Route path="/notifications" element={<NotificationsPage />} />
         <Route path="/settings" element={<SettingsPage />} />
         <Route path="/account" element={<AccountPage />} />

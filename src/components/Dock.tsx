@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { NavLink } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { useNotifications, useSettings } from "../store/AppContext";
 
 const ITEMS = [
@@ -9,6 +9,10 @@ const ITEMS = [
   { label: "Settings",      to: "/settings",      icon: "⚙" },
   { label: "Account",       to: "/account",       icon: "◌" },
 ];
+
+const ITEM_GAP = 110;   // px between circle centres
+const ARC_PULL = 32;    // max px the inactive items pull back left
+const ARC_STEP = 20;    // degrees per step
 
 function useIsDark(theme: "light" | "dark" | "system"): boolean {
   const [sysDark, setSysDark] = useState(
@@ -25,35 +29,48 @@ function useIsDark(theme: "light" | "dark" | "system"): boolean {
 }
 
 export function Dock() {
+  const navigate = useNavigate();
+  const { pathname } = useLocation();
   const { unreadCount } = useNotifications();
   const { theme } = useSettings();
   const isDark = useIsDark(theme);
 
+  const activeIndex = Math.max(0, ITEMS.findIndex((it) => it.to === pathname));
+
   return (
-    <aside className="dock glass" aria-label="Primary navigation">
-      <nav>
-        <ul className="dock-list">
-          {ITEMS.map((item) => {
-            const isNotif = item.to === "/notifications" && unreadCount > 0;
-            return (
-              <li key={item.to} className="dock-item-wrap">
-                <NavLink
-                  to={item.to}
-                  title={item.label}
-                  className={({ isActive }) => isActive ? "dock-btn active" : "dock-btn"}
-                  aria-label={item.label}
-                >
-                  <span aria-hidden="true">{item.icon}</span>
-                  {isNotif && <span className="dock-badge" aria-label="Unread" />}
-                </NavLink>
-              </li>
-            );
-          })}
-        </ul>
+    <>
+      {/* Items float freely along the arc — no background panel */}
+      <nav className="dial-layer" aria-label="Primary navigation">
+        {ITEMS.map((item, i) => {
+          const offset = i - activeIndex;
+          const angleRad = offset * ARC_STEP * (Math.PI / 180);
+          const xPull = ARC_PULL * (1 - Math.cos(angleRad));
+          const yOffset = offset * ITEM_GAP;
+          const isActive = i === activeIndex;
+          const opacity = isActive ? 1 : Math.max(0.35, Math.cos(Math.abs(offset) * 26 * (Math.PI / 180)));
+          const isNotif = item.to === "/notifications" && unreadCount > 0;
+
+          return (
+            <button
+              key={item.to}
+              className={`dial-btn${isActive ? " active" : ""}`}
+              style={{ transform: `translate(${-xPull}px, calc(-50% + ${yOffset}px))`, opacity }}
+              onClick={() => navigate(item.to)}
+              aria-label={item.label}
+              aria-current={isActive ? "page" : undefined}
+              title={item.label}
+            >
+              <span aria-hidden="true">{item.icon}</span>
+              {isNotif && <span className="dial-badge" aria-label="Unread" />}
+            </button>
+          );
+        })}
       </nav>
-      <div className="dock-theme-icon" aria-hidden="true" title={isDark ? "Dark" : "Light"}>
+
+      <div className="dial-theme-icon" aria-hidden="true">
         {isDark ? "☽" : "☀"}
       </div>
-    </aside>
+    </>
   );
 }
+
