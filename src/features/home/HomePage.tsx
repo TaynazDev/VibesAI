@@ -138,8 +138,15 @@ export function HomePage() {
             className="prompt-input"
             placeholder={placeholder}
             value={prompt}
+            rows={1}
             disabled={!hasApiKey}
-            onChange={(e) => setPrompt(e.target.value)}
+            onChange={(e) => {
+              setPrompt(e.target.value);
+              // Auto-expand height
+              const el = e.target;
+              el.style.height = "auto";
+              el.style.height = `${Math.min(el.scrollHeight, 240)}px`;
+            }}
             onKeyDown={(e) => {
               if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) runPrompt();
             }}
