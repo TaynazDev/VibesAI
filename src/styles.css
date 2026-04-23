@@ -297,6 +297,76 @@ body {
   animation: fade-in 600ms ease 400ms both;
 }
 
+.onboarding-root {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 2rem;
+}
+
+.onboarding-card {
+  width: min(920px, 100%);
+  border-radius: 28px;
+  padding: 1.4rem 1.5rem 1.2rem;
+}
+
+.onboarding-kicker {
+  margin: 0 0 0.4rem;
+  color: var(--accent);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  font-size: 0.72rem;
+  font-weight: 600;
+}
+
+.onboarding-card h1 {
+  margin: 0;
+  font-family: "Space Grotesk", sans-serif;
+  font-size: clamp(1.6rem, 3.2vw, 2.4rem);
+  line-height: 1.15;
+}
+
+.onboarding-subcopy {
+  margin: 0.6rem 0 1rem;
+  color: var(--ink-soft);
+  font-size: 0.95rem;
+}
+
+.onboarding-steps {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.65rem;
+}
+
+.onboarding-step {
+  background: var(--surface);
+  border: 1px solid var(--glass-stroke);
+  border-radius: var(--radius-md);
+  padding: 0.75rem 0.85rem;
+}
+
+.onboarding-step h2 {
+  margin: 0;
+  font-size: 0.9rem;
+  color: var(--ink-main);
+  font-family: "Space Grotesk", sans-serif;
+}
+
+.onboarding-step p {
+  margin: 0.35rem 0 0;
+  color: var(--ink-soft);
+  font-size: 0.84rem;
+  line-height: 1.55;
+}
+
+.onboarding-actions {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 0.55rem;
+  margin-top: 1rem;
+}
+
 /* ═══════════════════════════════════════════════
    DOCK — arc dial, no background
    ═══════════════════════════════════════════════ */
@@ -455,6 +525,35 @@ body {
   text-align: center;
   padding: 5rem 1rem 2rem;
   animation: fade-in 460ms ease both;
+  position: relative;
+}
+
+.ai-chat-history-menu {
+  position: absolute;
+  right: 0.5rem;
+  top: 1.1rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.ai-chat-history-select {
+  min-width: 250px;
+  max-width: 320px;
+  width: auto;
+  background: var(--surface);
+  border: 1px solid var(--glass-stroke);
+  border-radius: var(--radius-pill);
+  color: var(--ink-soft);
+  font-size: 0.78rem;
+  padding: 0.45rem 2rem 0.45rem 0.75rem;
+  cursor: pointer;
+}
+
+.ai-chat-new-btn {
+  padding: 0.35rem 0.5rem;
+  border: 1px solid var(--glass-stroke);
+  border-radius: var(--radius-pill);
 }
 
 .eyebrow {
@@ -1144,6 +1243,40 @@ select:focus {
 
   .ai-chat-msg .ai-chat-msg-bubble {
     max-width: 96%;
+  }
+
+  .ai-chat-history-menu {
+    position: static;
+    justify-content: center;
+    margin-bottom: 0.85rem;
+    flex-wrap: wrap;
+  }
+
+  .ai-chat-history-select {
+    min-width: 200px;
+    max-width: 100%;
+  }
+
+  .onboarding-root {
+    padding: 1.2rem;
+  }
+
+  .onboarding-card {
+    padding: 1rem;
+  }
+
+  .onboarding-steps {
+    grid-template-columns: 1fr;
+  }
+
+  .onboarding-actions {
+    justify-content: stretch;
+  }
+
+  .onboarding-actions .run-button,
+  .onboarding-actions .text-button {
+    flex: 1;
+    text-align: center;
   }
 }
 

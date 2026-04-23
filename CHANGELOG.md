@@ -9,6 +9,7 @@ All notable changes to VibesAI are documented in this file.
 - Builder project persistence model (`project.builder`) with saved plan, code, checkpoints, and step history.
 - Builder session resume route (`/builder/:id`) and recent session picker.
 - AI Chat sidebar page at the top of the dock stack (`/ai-chat`).
+- First-run onboarding page that appears after splash to explain the core workflow (Builder, AI Chat, Projects, Settings, exports).
 - Project export/import support:
   - Export full project package as `.vibesai.json`
   - Export generated preview as `.html`
@@ -51,6 +52,7 @@ All notable changes to VibesAI are documented in this file.
   - Removed boxed chat-window panel treatment so messages render in open space.
   - Starter suggestions now sit directly above the input bar.
   - Input bar styling softened to feel lighter while preserving usability.
+- App launch flow now gates first-time users through onboarding once before entering the main workspace.
 - Splash screen button shadow now supports gyro-based parallax on capable devices.
 - Tab icon and `theme-color` now sync to active theme at app level.
 - Builder suggestions are now shown only for stages 3, 4, and 5.

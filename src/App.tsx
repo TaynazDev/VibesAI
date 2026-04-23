@@ -1,10 +1,12 @@
 import { useEffect, useState } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
 import { AppShell } from "./app/AppShell";
+import { OnboardingPage } from "./components/OnboardingPage";
 import { SplashScreen } from "./components/SplashScreen";
 import { AccountPage } from "./features/account/AccountPage";
 import { BuildPage } from "./features/builder/BuildPage";
 import { ComingSoonPage } from "./features/coming-soon/ComingSoonPage";
+import { HomePage } from "./features/home/HomePage";
 import { NotificationsPage } from "./features/notifications/NotificationsPage";
 import { ProjectDetailPage } from "./features/projects/ProjectDetailPage";
 import { ProjectsPage } from "./features/projects/ProjectsPage";
@@ -15,6 +17,9 @@ function AppInner() {
   const { theme } = useSettings();
   const [splashDone, setSplashDone] = useState(
     () => sessionStorage.getItem("va_splash_done") === "1"
+  );
+  const [onboardingDone, setOnboardingDone] = useState(
+    () => localStorage.getItem("va_onboarding_done") === "1"
   );
 
   useEffect(() => {
@@ -59,13 +64,23 @@ function AppInner() {
     setSplashDone(true);
   };
 
+  const handleOnboardingDone = () => {
+    localStorage.setItem("va_onboarding_done", "1");
+    setOnboardingDone(true);
+  };
+
   if (!splashDone) {
     return <SplashScreen onDone={handleSplashDone} />;
+  }
+
+  if (!onboardingDone) {
+    return <OnboardingPage onDone={handleOnboardingDone} />;
   }
 
   return (
     <AppShell>
       <Routes>
+        <Route path="/ai-chat" element={<HomePage />} />
         <Route path="/" element={<BuildPage />} />
         <Route path="/builder/:id" element={<BuildPage />} />
         <Route path="/coming-soon" element={<ComingSoonPage />} />
