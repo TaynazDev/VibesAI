@@ -1260,8 +1260,73 @@ select:focus {
 }
 
 /* ═══════════════════════════════════════════════
-   Input helpers
+   Coming Soon section
    ═══════════════════════════════════════════════ */
+.coming-soon-label {
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+  margin-bottom: 0.75rem;
+  padding-left: 0.1rem;
+}
+
+.coming-soon-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 0.75rem;
+}
+
+.coming-soon-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.85rem;
+  padding: 1rem 1.1rem;
+  border-radius: var(--radius-md);
+  opacity: 0.45;
+  filter: grayscale(0.4);
+  pointer-events: none;
+  user-select: none;
+  position: relative;
+}
+
+.coming-soon-icon {
+  font-size: 1.4rem;
+  line-height: 1;
+  flex-shrink: 0;
+  margin-top: 0.05rem;
+}
+
+.coming-soon-title {
+  margin: 0 0 0.2rem;
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--ink-main);
+}
+
+.coming-soon-desc {
+  margin: 0;
+  font-size: 0.78rem;
+  color: var(--ink-soft);
+  line-height: 1.5;
+}
+
+.coming-soon-pill {
+  position: absolute;
+  top: 0.65rem;
+  right: 0.75rem;
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+  border: 1px solid var(--glass-stroke);
+  border-radius: var(--radius-pill);
+  padding: 0.15rem 0.5rem;
+}
+
+
 
 .input-hint {
   margin: 0.28rem 0 0;
