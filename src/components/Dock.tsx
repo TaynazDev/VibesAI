@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { useNotifications, useSettings } from "../store/AppContext";
 
 const ITEMS = [
+  { label: "AI Chat",       to: "/ai-chat",       icon: "✧" },
   { label: "Projects",      to: "/projects",      icon: "◫" },
   { label: "Alerts",        to: "/notifications", icon: "◉" },
   { label: "Home",          to: "/",              icon: "⌂" },
@@ -48,7 +49,7 @@ export function Dock() {
           const xPull = ARC_PULL * (1 - Math.cos(angleRad));
           const yOffset = offset * ITEM_GAP;
           const isActive = i === activeIndex;
-          const opacity = isActive ? 1 : Math.max(0.35, Math.cos(Math.abs(offset) * 26 * (Math.PI / 180)));
+          const opacity = isActive ? 1 : Math.max(0.68, Math.cos(Math.abs(offset) * 18 * (Math.PI / 180)));
           const isNotif = item.to === "/notifications" && unreadCount > 0;
 
           return (

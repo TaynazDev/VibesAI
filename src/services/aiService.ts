@@ -156,22 +156,53 @@ async function runGemma(mode: AIMode, prompt: string, opts: AIOptions, key: stri
 export async function runAI(mode: AIMode, prompt: string, opts: AIOptions): Promise<AIResult> {
   const s = getSettings();
   const provider = s.provider ?? "openai";
+  const providerOrder = ([provider, "openai", "openrouter", "gemma"] as const)
+    .filter((p, i, arr) => arr.indexOf(p) === i);
 
-  if (provider === "openrouter") {
-    const key = s.openrouterKey?.trim() ?? "";
-    if (!key) throw new Error("NO_API_KEY");
-    const model = s.openrouterModel?.trim() || "google/gemma-3-27b-it";
-    return runOpenRouter(mode, prompt, opts, key, model);
+  let sawUsableKey = false;
+  let lastError: Error | null = null;
+
+  for (const candidate of providerOrder) {
+    try {
+      if (candidate === "openai") {
+        const key = s.apiKey?.trim() ?? "";
+        if (!key) continue;
+        sawUsableKey = true;
+        return await runOpenAI(mode, prompt, opts, key);
+      }
+
+      if (candidate === "openrouter") {
+        const key = s.openrouterKey?.trim() ?? "";
+        if (!key) continue;
+        sawUsableKey = true;
+        const model = s.openrouterModel?.trim() || "google/gemma-3-27b-it";
+        return await runOpenRouter(mode, prompt, opts, key, model);
+      }
+
+      const key = s.gemmaKey?.trim() ?? "";
+      if (!key) continue;
+      sawUsableKey = true;
+      return await runGemma(mode, prompt, opts, key);
+    } catch (err: unknown) {
+      const e = err instanceof Error ? err : new Error("AI request failed.");
+      const m = e.message.toLowerCase();
+      const retriableAuthError =
+        m.includes("no_api_key") ||
+        m.includes("no api key") ||
+        m.includes("unauthorized") ||
+        m.includes("invalid api key") ||
+        m.includes("invalid authentication") ||
+        m.includes("401") ||
+        m.includes("403");
+      if (!retriableAuthError) {
+        throw e;
+      }
+      lastError = e;
+    }
   }
 
-  if (provider === "gemma") {
-    const key = s.gemmaKey?.trim() ?? "";
-    if (!key) throw new Error("NO_API_KEY");
-    return runGemma(mode, prompt, opts, key);
+  if (!sawUsableKey) {
+    throw new Error("NO_API_KEY");
   }
-
-  // Default: OpenAI
-  const key = s.apiKey?.trim() ?? "";
-  if (!key) throw new Error("NO_API_KEY");
-  return runOpenAI(mode, prompt, opts, key);
+  throw lastError ?? new Error("All configured AI providers failed.");
 }

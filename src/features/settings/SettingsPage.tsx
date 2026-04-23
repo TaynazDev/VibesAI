@@ -11,11 +11,11 @@ const OPENROUTER_FREE_MODELS = [
 ];
 
 const OPENROUTER_PAID_MODELS = [
+  { value: "google/gemma-3-27b-it", label: "Gemma 3 27B Instruct" },
   { value: "openai/gpt-4o", label: "GPT-4o" },
   { value: "openai/gpt-4o-mini", label: "GPT-4o mini" },
   { value: "anthropic/claude-3.5-sonnet", label: "Claude 3.5 Sonnet" },
   { value: "google/gemini-2.5-pro-preview", label: "Gemini 2.5 Pro" },
-  { value: "meta-llama/llama-3.3-70b-instruct", label: "Llama 3.3 70B Instruct" },
 ];
 
 export function SettingsPage() {

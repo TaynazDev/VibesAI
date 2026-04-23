@@ -81,15 +81,7 @@ Save and reuse prompts.
 
 > Ideas that haven't been added to the UI yet. Add freely.
 
-- **Deploy to Web / App Store** — after the builder workflow finishes, let users publish their generated app directly
-  - Web deploy: upload the HTML file to a hosting provider (Netlify/Vercel via API, or GitHub Pages) and return a live URL
-  - Progressive Web App: inject a service worker + manifest into the generated HTML so it can be "installed" from a browser
-  - Mobile App Store: wrap the generated app in Capacitor/Cordova, build signed APK/IPA, upload to Google Play (via Burstable API) and App Store Connect (via App Store Connect API)
-  - Needs: server-side function to proxy deployment APIs (keys shouldn't be client-side), per-app domain/subdomain system, optional custom domain support
-
-- **Arc dial dock** — The left nav pill becomes a physical dial: the active item protrudes furthest right, items above/below curve back using cosine-based pullback. Navigating animates all items to new arc positions (spring easing). Feels like rotating a real dial.
-  - Implementation: `useLocation` + index-based offset, `cos(offset * ARC_STEP)` for x-pull, `offset * ITEM_GAP` for y-offset, `transform: translate(xPull, yOffset)` on each button, spring transition `cubic-bezier(0.34, 1.56, 0.64, 1)`. The pill background is pushed `left: -58px` so only its right curved edge is visible.
-  - Was partially implemented and reverted — see commit `f6bc5bd`
+### 🔴 Now
 
 - **Express Mode (1-stage builder)** — Add a mode switch in the top-right corner that runs a single fast stage from one prompt.
   - Flow: user enters one prompt → AI plans, functionalises, and designs in one run → user is taken to an **Edit** page.
@@ -97,46 +89,73 @@ Save and reuse prompts.
   - Output: include a prominent final download button after edits are complete.
   - Needs: mode toggle UI (Standard vs Express), express pipeline prompt template, new `/edit` route, shared checkpoint/history model so Express edits still save to Projects.
 
-- **AI Critic Pass** — after each generation, run a second AI pass that scores UX clarity, visual hierarchy, accessibility, and performance with one-click fixes.
-- **Brand DNA Presets** — save reusable brand packs (colors, type, spacing, voice) and apply them instantly in builder and edit flows.
-- **Competitive Clone Mode** — paste a URL and let AI recreate an inspired, legally clean version of layout + interaction patterns.
-- **User Journey Simulator** — AI simulates multiple personas and reports friction points before export.
-- **Component Locking** — lock specific sections so later AI edits cannot modify them unless unlocked.
-- **Time Travel Editor** — visual timeline of major changes with preview snapshots and instant rollback.
-- **Mobile-First Toggle** — one switch that prioritizes touch targets, mobile nav, and compact responsive spacing.
-- **Prompt-to-Database Schema** — derive entities, fields, and relationships from the app prompt.
-- **Built-In Analytics Starter** — auto-inject event tracking scaffolding into generated apps.
-- **Collaboration Review Links** — share preview links where teammates can comment directly on UI elements.
-- **Conversion Mode** — design pass focused on landing-page conversion structure and persuasive CTA flow.
-- **Accessibility Hardening Mode** — one-click WCAG pass (contrast, focus, semantic structure, keyboard flow).
-- **Smart Naming Pass** — auto-rename sections/components/classes into clean semantic names.
-- **Auto Changelog** — every generation/edit creates a human-readable change summary.
-- **Template Marketplace** — community templates and prompt blueprints users can fork in one click.
-- **Voice-to-App Mode** — speak your app idea and refinements with real-time prompt cleanup before generation.
-- **Screenshot-to-UI Rebuild** — upload a screenshot and have AI recreate the interface as editable code.
-- **Business Logic Wizard** — guided setup for pricing rules, permissions, workflows, and validation.
-- **AI QA Test Generator** — auto-create test scenarios and click paths before export.
-- **Prompt Cost Estimator** — show token/cost estimate pre-run and suggest cheaper model alternatives.
-- **Undo Intent (Natural Language)** — commands like "undo just the typography change" for scoped rollback.
-- **Persona-Based Style Packs** — presets like Startup SaaS, Luxury Brand, and Creator Economy.
-- **Data Seeder** — generate realistic mock data for dashboards, lists, and forms.
-- **API Connection Mapper** — scaffold endpoint wiring, auth, loading states, and error handling from a short brief.
-- **Compliance Guardrails** — optional GDPR/accessibility/compliance-friendly defaults and copy.
-- **Multi-Page App Map** — AI proposes sitemap/routes first, then builds page-by-page with shared components.
-- **Release Readiness Score** — final pre-download checklist + score for UX, a11y, responsive, and performance.
+  - Web deploy: Netlify/Vercel/GitHub Pages upload and return live URL.
+  - Progressive Web App: inject service worker + manifest.
+  - Mobile App Store: Capacitor/Cordova wrapper and store upload pipeline.
+  - Needs: server-side deployment proxy, domain mapping, optional custom domains.
+- **Diff view** — side-by-side before/after for refactor/edit outputs.
+- **Streaming responses** — token streaming instead of full-response waiting.
+- **AI Critic Pass** — second-pass scoring for UX, accessibility, and performance with one-click fixes.
+- **Component Locking** — lock sections so AI can't change protected blocks.
+- **Time Travel Editor** — visual timeline with snapshot rollback.
+- **Release Readiness Score** — final score + checklist for UX/a11y/responsive/perf.
+- **Speech-to-Text** — you can talk to the AI instead of typing.
+- **VibesAI Visual Identity Pass** — refine this app's own look to feel more premium and distinct.
+  - Improve left-dial/nav readability and hierarchy while keeping the signature look.
+  - Tighten spacing rhythm and panel balance across Builder, Projects, Settings, and Account.
+  - Add cohesive motion language (entry transitions, state changes, and feedback timing).
+- **Aesthetic Presets for VibesAI UI** — switchable in-app skins for this product itself (not generated apps), e.g. Glass Neon, Editorial Soft, Minimal Mono.
+- **Design QA for VibesAI Surfaces** — checklist + automated pass for contrast, visual consistency, and mobile polish of this app's own interface.
 
-- **Diff view** — when Refactor mode returns output, show a side-by-side before/after diff
-- **Streaming responses** — stream GPT output token by token instead of waiting for the full response
-- **Multiple models** — let users pick GPT-4o, GPT-4o-mini, Claude, Gemini from a model picker
-- **Export** — download result as .txt, .md, .docx, or copy as rich text
-- **Dark/light branded export cards** — generate a shareable image card of the result
-- **Mobile app** — React Native or Capacitor wrapper around this PWA
-- **Keyboard command palette** — `Cmd+K` opens a Raycast-style command palette for all actions
-- **Prompt versioning** — track edits to a prompt over time, restore previous versions
-- **Collaborative sessions** — real-time co-editing of a prompt with another user (WebSocket)
-- **AI on notifications** — summarise all unread notifications in one click
-- **Project-scoped context** — each Project can have its own system prompt, style guide, and history
-- **Plugin system** — allow third-party plugins to add new AI modes or result renderers
+### 🟠 Next
+
+
+- **Deploy to Web / App Store** — publish generated apps directly from the builder.
+- **Brand DNA Presets** — reusable brand packs (color, type, spacing, voice).
+- **Aesthetic Direction Generator** — AI proposes 3 distinct visual directions (plus custom) before applying design changes.
+- **Theme Mixer** — blend two styles (e.g., "neo brutalist + glass") with adjustable intensity sliders.
+- **Visual Consistency Pass** — normalize spacing, radius, type scale, icon style, and shadow language across all screens.
+- **Motion Design Pass** — apply purposeful micro-interactions, page transitions, and staggered reveals with timing controls.
+- **Color System Studio** — generate semantic palettes (primary/success/warn/error/surface states) with contrast validation.
+- **Screenshot-to-UI Rebuild** — upload screenshot and rebuild editable interface.
+- **AI Conversation Mode** — multi-turn back-and-forth with the AI, with memory and context, to design your app.
+- **Voice-to-App Mode** — voice-first prompt/refinement workflow.
+- **Business Logic Wizard** — guided setup for rules, permissions, workflows.
+- **Prompt-to-Database Schema** — derive entities and relations from prompt.
+- **API Connection Mapper** — scaffold endpoint wiring + loading/error/auth states.
+- **Data Seeder** — realistic mock datasets for generated apps.
+- **Built-In Analytics Starter** — inject event tracking scaffolding.
+- **Prompt Cost Estimator** — pre-run cost forecast + cheaper model suggestions.
+- **Accessibility Hardening Mode** — one-click WCAG-focused cleanup pass.
+- **Smart Naming Pass** — semantic rename pass for sections/components/classes.
+- **Multi-Page App Map** — route-first generation flow.
+- **Export** — richer download formats (.txt/.md/.docx) and rich-copy support.
+- **Dark/light branded export cards** — social-ready share cards.
+- **Project-scoped context** — per-project system prompt, style guide, and memory.
+
+### 🟢 Later
+
+- **Competitive Clone Mode** — inspired layout/interaction recreation from URLs.
+- **User Journey Simulator** — persona-based friction analysis.
+- **Collaboration Review Links** — comment-on-preview collaboration links.
+- **Collaborative sessions** — real-time co-editing via WebSocket.
+- **Template Marketplace** — community templates and blueprints.
+- **Persona-Based Style Packs** — predefined vertical-specific style archetypes.
+- **Design Tokens Export** — export full theme tokens (CSS vars / JSON) for reuse across projects.
+- **Typography Pairing Engine** — AI suggests and applies balanced heading/body font pairs per brand tone.
+- **Layout Rhythm Optimizer** — auto-tune section spacing and grid rhythm for cleaner visual flow.
+- **Compliance Guardrails** — GDPR/accessibility/compliance defaults.
+- **AI QA Test Generator** — auto-generate QA scenarios and click paths.
+- **Undo Intent (Natural Language)** — scoped rollback commands in plain language.
+- **Conversion Mode** — conversion-focused design/copy pass for landing funnels.
+- **Multiple models** — broader model picker across providers.
+- **AI on notifications** — summarize unread notifications in one action.
+- **Auto Changelog** — user-facing changelog auto-generated after each pass.
+- **Keyboard command palette** — `Cmd+K` command surface.
+- **Prompt versioning** — restore previous prompt versions.
+- **Plugin system** — third-party AI modes/result renderers.
+- **Arc dial dock** — physical dial-style left nav (kept as visual experiment backlog).
+- **Mobile app** — React Native/Capacitor wrapper for native distribution.
 
 ---
 

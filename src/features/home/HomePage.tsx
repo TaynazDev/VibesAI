@@ -11,6 +11,13 @@ type ChatMessage = {
   timestamp: string;
 };
 
+type ChatSession = {
+  id: string;
+  title: string;
+  updatedAt: number;
+  messages: ChatMessage[];
+};
+
 const uid = () => Math.random().toString(36).slice(2, 10);
 
 const DEFAULT_OPTIONS: AIOptions = {
@@ -25,6 +32,29 @@ const STARTERS = [
   "Refine this feature idea into clear user stories.",
   "Draft a clean pricing page section with copy.",
 ];
+
+const CHAT_HISTORY_KEY = "vibesai_chat_history_v1";
+
+function makeSessionTitle(messages: ChatMessage[]): string {
+  const firstUser = messages.find((m) => m.role === "user")?.content.trim();
+  if (!firstUser) return "New chat";
+  return firstUser.length > 42 ? `${firstUser.slice(0, 42)}...` : firstUser;
+}
+
+function formatSessionLabel(session: ChatSession): string {
+  const d = new Date(session.updatedAt);
+  const stamp = Number.isNaN(d.getTime()) ? "recent" : d.toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+  return `${session.title} • ${stamp}`;
+}
+
+function createEmptySession(): ChatSession {
+  return {
+    id: uid(),
+    title: "New chat",
+    updatedAt: Date.now(),
+    messages: [],
+  };
+}
 
 function buildChatPrompt(messages: ChatMessage[], userInput: string): string {
   const transcript = [...messages, { id: "latest", role: "user" as const, content: userInput, timestamp: "now" }]
@@ -44,24 +74,73 @@ function buildChatPrompt(messages: ChatMessage[], userInput: string): string {
 export function HomePage() {
   const dispatch = useAppDispatch();
   const settings = useSettings();
-  const providerLabel = settings.provider === "openrouter"
-    ? "OpenRouter"
-    : settings.provider === "gemma"
-      ? "Gemma"
-      : "OpenAI";
 
   const hasApiKey =
-    (settings.provider === "openrouter" && Boolean(settings.openrouterKey)) ||
-    (settings.provider === "gemma" && Boolean(settings.gemmaKey)) ||
+    Boolean(settings.openrouterKey) ||
+    Boolean(settings.gemmaKey) ||
     Boolean(settings.apiKey);
 
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [history, setHistory] = useState<ChatSession[]>([]);
+  const [activeHistoryId, setActiveHistoryId] = useState<string>("");
   const [input, setInput] = useState("");
   const [isRunning, setIsRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const messagesRef = useRef<ChatMessage[]>([]);
   const endRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const didHydrateRef = useRef(false);
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(CHAT_HISTORY_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw) as ChatSession[];
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          const sorted = [...parsed].sort((a, b) => b.updatedAt - a.updatedAt);
+          setHistory(sorted);
+          setActiveHistoryId(sorted[0].id);
+          setMessages(sorted[0].messages ?? []);
+          didHydrateRef.current = true;
+          return;
+        }
+      }
+    } catch {
+      /* ignore bad history payload */
+    }
+
+    const first = createEmptySession();
+    setHistory([first]);
+    setActiveHistoryId(first.id);
+    setMessages([]);
+    didHydrateRef.current = true;
+  }, []);
+
+  useEffect(() => {
+    if (!didHydrateRef.current || !activeHistoryId) {
+      return;
+    }
+
+    setHistory((prev) => {
+      if (prev.length === 0) {
+        return prev;
+      }
+
+      const next = prev.map((session) =>
+        session.id === activeHistoryId
+          ? {
+              ...session,
+              title: makeSessionTitle(messages),
+              updatedAt: Date.now(),
+              messages,
+            }
+          : session
+      );
+      next.sort((a, b) => b.updatedAt - a.updatedAt);
+      localStorage.setItem(CHAT_HISTORY_KEY, JSON.stringify(next));
+      return next;
+    });
+  }, [activeHistoryId, messages]);
 
   useEffect(() => {
     messagesRef.current = messages;
@@ -73,10 +152,34 @@ export function HomePage() {
 
   const placeholder = useMemo(() => {
     if (!hasApiKey) {
-      return `Add your ${providerLabel} key in Settings to start chatting…`;
+      return "Add any provider key in Settings to start chatting...";
     }
     return "Send a message…";
-  }, [hasApiKey, providerLabel]);
+  }, [hasApiKey]);
+
+  function startNewChat() {
+    const fresh = createEmptySession();
+    setHistory((prev) => {
+      const next = [fresh, ...prev].sort((a, b) => b.updatedAt - a.updatedAt);
+      localStorage.setItem(CHAT_HISTORY_KEY, JSON.stringify(next));
+      return next;
+    });
+    setActiveHistoryId(fresh.id);
+    setMessages([]);
+    setInput("");
+    setError(null);
+  }
+
+  function switchHistory(nextId: string) {
+    if (!nextId || nextId === activeHistoryId) {
+      return;
+    }
+    const selected = history.find((session) => session.id === nextId);
+    setActiveHistoryId(nextId);
+    setMessages(selected?.messages ?? []);
+    setInput("");
+    setError(null);
+  }
 
   async function sendMessage(overrideText?: string) {
     const content = (overrideText ?? input).trim();
@@ -138,13 +241,30 @@ export function HomePage() {
   return (
     <div className="page-stack home-page">
       <header className="hero">
+        <div className="ai-chat-history-menu">
+          <select
+            className="ai-chat-history-select"
+            value={activeHistoryId}
+            onChange={(e) => switchHistory(e.target.value)}
+            aria-label="Chat history"
+          >
+            {history.map((session) => (
+              <option key={session.id} value={session.id}>
+                {formatSessionLabel(session)}
+              </option>
+            ))}
+          </select>
+          <button type="button" className="text-button ai-chat-new-btn" onClick={startNewChat}>
+            New chat
+          </button>
+        </div>
         <h1>AI Chat</h1>
-        <p className="hero-copy">Uses your configured {providerLabel} key from Settings</p>
+        <p className="hero-copy">Uses any configured provider key from Settings</p>
       </header>
 
       {!hasApiKey && (
         <div className="api-key-banner">
-          <span>Connect your {providerLabel} API key to enable AI chat.</span>
+          <span>Connect any provider API key in Settings to enable AI chat.</span>
           <NavLink to="/settings" className="banner-cta">Add key →</NavLink>
         </div>
       )}
