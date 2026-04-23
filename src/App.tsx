@@ -14,6 +14,7 @@ import { SettingsPage } from "./features/settings/SettingsPage";
 import { AppProvider, useSettings } from "./store/AppContext";
 
 function AppInner() {
+  const baseUrl = import.meta.env.BASE_URL;
   const { theme } = useSettings();
   const [splashDone, setSplashDone] = useState(
     () => sessionStorage.getItem("va_splash_done") === "1"
@@ -29,8 +30,8 @@ function AppInner() {
         ? (media.matches ? "dark" : "light")
         : theme;
       const iconHref = resolvedTheme === "dark"
-        ? "/branding/vibesai-logo-dark.jpg"
-        : "/branding/vibesai-logo-light.jpg";
+        ? `${baseUrl}branding/vibesai-logo-dark.jpg`
+        : `${baseUrl}branding/vibesai-logo-light.jpg`;
 
       let iconLink = document.querySelector('link[rel="icon"]') as HTMLLinkElement | null;
       if (!iconLink) {
@@ -57,7 +58,7 @@ function AppInner() {
 
     media.addEventListener("change", applyThemeHead);
     return () => media.removeEventListener("change", applyThemeHead);
-  }, [theme]);
+  }, [baseUrl, theme]);
 
   const handleSplashDone = () => {
     sessionStorage.setItem("va_splash_done", "1");

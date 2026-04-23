@@ -6,6 +6,7 @@ interface Props {
 }
 
 export function SplashScreen({ onDone }: Props) {
+  const baseUrl = import.meta.env.BASE_URL;
   const { theme } = useSettings();
   const isDark =
     theme === "dark" ||
@@ -13,8 +14,8 @@ export function SplashScreen({ onDone }: Props) {
       window.matchMedia("(prefers-color-scheme: dark)").matches);
 
   const logo = isDark
-    ? "/branding/vibesai-logo-dark.jpg"
-    : "/branding/vibesai-logo-light.jpg";
+    ? `${baseUrl}branding/vibesai-logo-dark.jpg`
+    : `${baseUrl}branding/vibesai-logo-light.jpg`;
 
   const [phase, setPhase] = useState<"idle" | "pressed" | "fading">("idle");
   const [shadowOffset, setShadowOffset] = useState({ x: 0, y: 0 });
