@@ -1,19 +1,20 @@
-import { useRef, useState } from "react";
-import { NavLink } from "react-router-dom";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { NavLink, useParams } from "react-router-dom";
 import { GlassPanel } from "../../components/GlassPanel";
 import { Spinner } from "../../components/Spinner";
 import { generatePlan, runBuilderStep } from "../../services/builderService";
-import { useSettings } from "../../store/AppContext";
+import { useAppDispatch, useProjects, useSettings } from "../../store/AppContext";
 import type { AppPlan, BuildMessage, BuildStep, Checkpoint } from "./buildTypes";
 import { STEP_DESCRIPTIONS, STEP_LABELS } from "./buildTypes";
 import { LivePreview } from "./LivePreview";
 
 const uid = () => Math.random().toString(36).slice(2, 10);
+const BUILDER_SESSION_KEY = "va_builder_project_id";
 
 const STEP_INTROS: Record<number, string> = {
   1: "Build the initial prototype based on the plan. Make it visually polished and modern.",
   2: "Implement all the features to make the app fully functional.",
-  3: "Polish the visual design — make it look premium and professional.",
+  3: "Before changing visuals, propose exactly 3 aesthetic directions as short options. Do not apply any code yet.",
   4: "Analyse the current app carefully and ask me 3 smart, proactive questions about what to finalize or improve.",
 };
 
@@ -60,10 +61,11 @@ function ChatBubble({
   msg: BuildMessage;
   onSuggestion: (text: string) => void;
 }) {
+  const allowSuggestions = msg.step >= 2;
   return (
     <div className={`chat-msg chat-msg--${msg.role}`}>
       <div className="chat-msg-bubble">{msg.content}</div>
-      {msg.role === "ai" && msg.suggestions && msg.suggestions.length > 0 && (
+      {allowSuggestions && msg.role === "ai" && msg.suggestions && msg.suggestions.length > 0 && (
         <div className="suggestion-chips">
           {msg.suggestions.map((s, i) => (
             <button key={i} className="suggestion-chip" onClick={() => onSuggestion(s)}>
@@ -79,11 +81,26 @@ function ChatBubble({
 // ── Main component ────────────────────────────────────────────────────────
 
 export function BuildPage() {
+  const { id: routeProjectId } = useParams<{ id?: string }>();
+  const dispatch = useAppDispatch();
+  const projects = useProjects();
   const settings = useSettings();
   const hasApiKey =
     (settings.provider === "openrouter" && Boolean(settings.openrouterKey)) ||
     (settings.provider === "gemma" && Boolean(settings.gemmaKey)) ||
     Boolean(settings.apiKey);
+  const [currentProjectId, setCurrentProjectId] = useState<string | null>(
+    () => routeProjectId ?? sessionStorage.getItem(BUILDER_SESSION_KEY)
+  );
+
+  const builderProject = useMemo(
+    () => projects.find((project) => project.id === currentProjectId && project.builder),
+    [projects, currentProjectId]
+  );
+  const builderSessions = useMemo(
+    () => projects.filter((project) => project.builder),
+    [projects]
+  );
 
   // ── Step / Plan state ────────────────────────────────────────────────
   const [step, setStep] = useState<BuildStep>(0);
@@ -109,10 +126,89 @@ export function BuildPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [chatInput, setChatInput] = useState("");
   const [showCheckpoints, setShowCheckpoints] = useState(false);
+  const [aestheticOptions, setAestheticOptions] = useState<string[]>([]);
+  const [selectedAesthetic, setSelectedAesthetic] = useState<string>("");
+  const [customAesthetic, setCustomAesthetic] = useState("");
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const chatInputRef = useRef<HTMLTextAreaElement>(null);
   const autoStarted = useRef<Set<number>>(new Set());
+  const hydratedProjectId = useRef<string | null>(null);
+  const lastSavedSnapshot = useRef("");
+
+  useEffect(() => {
+    if (routeProjectId && routeProjectId !== currentProjectId) {
+      setCurrentProjectId(routeProjectId);
+    }
+  }, [currentProjectId, routeProjectId]);
+
+  useEffect(() => {
+    if (!currentProjectId) {
+      sessionStorage.removeItem(BUILDER_SESSION_KEY);
+      return;
+    }
+    sessionStorage.setItem(BUILDER_SESSION_KEY, currentProjectId);
+  }, [currentProjectId]);
+
+  useEffect(() => {
+    if (!builderProject?.builder || hydratedProjectId.current === builderProject.id) {
+      return;
+    }
+
+    const builder = builderProject.builder;
+    setStep(builder.currentStep);
+    setMaxReached(builder.currentStep);
+    setPlan(builder.plan);
+    setCurrentCode(builder.generatedCode);
+    setCheckpoints(builder.checkpoints);
+    setMessages(builder.messages);
+    setStepHistory(builder.stepHistory);
+    setAppDesc(builder.plan ? `${builder.plan.name} — ${builder.plan.tagline}` : "");
+    hydratedProjectId.current = builderProject.id;
+    lastSavedSnapshot.current = JSON.stringify(builder);
+  }, [builderProject]);
+
+  useEffect(() => {
+    if (!currentProjectId || !plan) {
+      return;
+    }
+
+    const builder = {
+      currentStep: step,
+      plan,
+      generatedCode: currentCode,
+      checkpoints,
+      messages,
+      stepHistory,
+    };
+
+    const snapshot = JSON.stringify(builder);
+    if (snapshot === lastSavedSnapshot.current) {
+      return;
+    }
+
+    lastSavedSnapshot.current = snapshot;
+    dispatch({
+      type: "PROJECT_BUILDER_SAVE",
+      id: currentProjectId,
+      name: plan.name,
+      status: currentCode || step > 0 ? "Active" : "Draft",
+      builder,
+    });
+  }, [checkpoints, currentCode, currentProjectId, dispatch, messages, plan, step, stepHistory]);
+
+  useEffect(() => {
+    if (aestheticOptions.length > 0) {
+      return;
+    }
+    const latestAestheticMsg = [...messages]
+      .reverse()
+      .find((message) => message.step === 3 && message.role === "ai" && message.suggestions?.length);
+    if (!latestAestheticMsg?.suggestions) {
+      return;
+    }
+    setAestheticOptions(latestAestheticMsg.suggestions.slice(0, 3));
+  }, [aestheticOptions.length, messages]);
 
   // ── Helpers ──────────────────────────────────────────────────────────
 
@@ -146,6 +242,7 @@ export function BuildPage() {
     }
 
     const history = stepHistory[s] ?? [];
+    const waitingForAestheticChoice = s === 3 && !selectedAesthetic;
     try {
       const response = await runBuilderStep(s, plan, currentCode, history, userMessage);
 
@@ -159,6 +256,30 @@ export function BuildPage() {
       }));
 
       addMsg(s, "ai", response.message, response.suggestions);
+      dispatch({
+        type: "NOTIFICATION_ADD",
+        notification: {
+          title: `${STEP_LABELS[s]} updated`,
+          detail: response.message.slice(0, 88),
+          timestamp: "just now",
+          unread: true,
+          kind: "builder",
+        },
+      });
+
+      if (waitingForAestheticChoice) {
+        const options = (response.suggestions ?? []).filter(Boolean).slice(0, 3);
+        setAestheticOptions(
+          options.length > 0
+            ? options
+            : [
+                "Clean Glass Minimal",
+                "Bold Neon Futuristic",
+                "Soft Editorial Premium",
+              ]
+        );
+        return;
+      }
 
       if (response.code) {
         setCurrentCode(response.code);
@@ -183,6 +304,12 @@ export function BuildPage() {
     setStep(nextStep);
     if (nextStep > maxReached) setMaxReached(nextStep);
 
+    if (nextStep !== 3) {
+      setSelectedAesthetic("");
+      setCustomAesthetic("");
+      setAestheticOptions([]);
+    }
+
     // Auto-start the step's initial AI message
     if (nextStep > 0 && !autoStarted.current.has(nextStep) && hasApiKey) {
       autoStarted.current.add(nextStep);
@@ -201,7 +328,30 @@ export function BuildPage() {
     setIsPlanLoading(true);
     try {
       const p = await generatePlan(appDesc);
+      const nextProjectId = currentProjectId ?? uid();
+      if (!currentProjectId) {
+        setCurrentProjectId(nextProjectId);
+      }
+      hydratedProjectId.current = nextProjectId;
+      lastSavedSnapshot.current = "";
+      autoStarted.current = new Set();
+      setStep(0);
+      setMaxReached(0);
       setPlan(p);
+      setCurrentCode("");
+      setCheckpoints([]);
+      setMessages([]);
+      setStepHistory({});
+      dispatch({
+        type: "NOTIFICATION_ADD",
+        notification: {
+          title: `Plan ready for ${p.name}`,
+          detail: "Saved to Projects automatically.",
+          timestamp: "just now",
+          unread: true,
+          kind: "builder",
+        },
+      });
     } catch (e: unknown) {
       alert(e instanceof Error ? e.message : "Failed to generate plan. Check your API key in Settings.");
     } finally {
@@ -232,6 +382,14 @@ export function BuildPage() {
       estimatedComplexity: editFields.complexity as "Simple" | "Medium" | "Complex",
     });
     setEditingPlan(false);
+  }
+
+  function applyChosenAesthetic(aesthetic: string) {
+    if (!aesthetic.trim()) {
+      return;
+    }
+    setSelectedAesthetic(aesthetic);
+    void doChat(`Apply this exact aesthetic direction to the app: ${aesthetic}. Keep all functionality intact.`, 3);
   }
 
   // ── Render: Step 0 ────────────────────────────────────────────────────
@@ -275,6 +433,39 @@ export function BuildPage() {
             </button>
           </div>
         </GlassPanel>
+
+        {builderSessions.length > 0 && (
+          <GlassPanel title="Recent Builder Sessions">
+            <div className="builder-session-grid">
+              {builderSessions.slice(0, 6).map((project) => (
+                <button
+                  key={project.id}
+                  type="button"
+                  className={`builder-session-card${project.id === currentProjectId ? " builder-session-card--active" : ""}`}
+                  onClick={() => setCurrentProjectId(project.id)}
+                >
+                  <div className="builder-session-top">
+                    <strong>{project.name}</strong>
+                    <span className="badge muted">{project.updatedAt}</span>
+                  </div>
+                  <p>
+                    {project.builder?.plan?.tagline ?? "Saved builder session"}
+                  </p>
+                  <div className="project-list-builder-row">
+                    <span className="badge">Step {((project.builder?.currentStep ?? 0) + 1).toString()}</span>
+                    <NavLink
+                      to={`/builder/${project.id}`}
+                      className="project-inline-link"
+                      onClick={(event) => event.stopPropagation()}
+                    >
+                      Open
+                    </NavLink>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </GlassPanel>
+        )}
 
         {/* ── Plan card ── */}
         {plan && !editingPlan && (
@@ -394,6 +585,14 @@ export function BuildPage() {
           <div className="builder-step-header">
             <h2 className="builder-step-title">{STEP_LABELS[step]}</h2>
             <p className="builder-step-desc">{STEP_DESCRIPTIONS[step]}</p>
+            {currentProjectId && plan && (
+              <div className="builder-project-pill">
+                <span>Saved to Projects</span>
+                <NavLink to={`/projects/${currentProjectId}`} className="builder-project-link">
+                  {plan.name}
+                </NavLink>
+              </div>
+            )}
           </div>
 
           <div className="chat-messages">
@@ -450,17 +649,70 @@ export function BuildPage() {
 
           {/* Input */}
           <div className="chat-input-area">
+            {step === 3 && (
+              <div className="aesthetic-picker">
+                <p className="aesthetic-picker-title">
+                  Pick an aesthetic direction before generation
+                </p>
+
+                {aestheticOptions.length > 0 ? (
+                  <div className="aesthetic-options">
+                    {aestheticOptions.map((option) => (
+                      <button
+                        key={option}
+                        type="button"
+                        className={`aesthetic-option${selectedAesthetic === option ? " active" : ""}`}
+                        onClick={() => applyChosenAesthetic(option)}
+                        disabled={isLoading}
+                      >
+                        {option}
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    className="text-button"
+                    onClick={() => doChat("Propose exactly 3 aesthetics before applying visuals.", 3)}
+                    disabled={isLoading}
+                  >
+                    Generate 3 Aesthetic Options
+                  </button>
+                )}
+
+                <div className="aesthetic-custom-row">
+                  <input
+                    className="search-input"
+                    placeholder="Something else…"
+                    value={customAesthetic}
+                    onChange={(e) => setCustomAesthetic(e.target.value)}
+                    disabled={isLoading}
+                  />
+                  <button
+                    type="button"
+                    className="text-button"
+                    onClick={() => applyChosenAesthetic(customAesthetic)}
+                    disabled={!customAesthetic.trim() || isLoading}
+                  >
+                    Apply
+                  </button>
+                </div>
+              </div>
+            )}
+
             <textarea
               ref={chatInputRef}
               className="chat-input"
               placeholder={
                 step === 4
                   ? "Answer AI's questions or ask for changes…"
+                  : step === 3 && !selectedAesthetic
+                    ? "Pick an aesthetic first, then refine it here…"
                   : "Tell AI what to do… (e.g. 'Add a dark mode toggle')"
               }
               value={chatInput}
               rows={2}
-              disabled={isLoading || !hasApiKey}
+              disabled={isLoading || !hasApiKey || (step === 3 && !selectedAesthetic)}
               onChange={(e) => {
                 setChatInput(e.target.value);
                 const el = e.target;

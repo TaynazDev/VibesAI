@@ -3,9 +3,10 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { useNotifications, useSettings } from "../store/AppContext";
 
 const ITEMS = [
-  { label: "Home",          to: "/",              icon: "⌂" },
   { label: "Projects",      to: "/projects",      icon: "◫" },
   { label: "Alerts",        to: "/notifications", icon: "◉" },
+  { label: "Home",          to: "/",              icon: "⌂" },
+  { label: "Soon",          to: "/coming-soon",   icon: "✦" },
   { label: "Settings",      to: "/settings",      icon: "⚙" },
   { label: "Account",       to: "/account",       icon: "◌" },
 ];

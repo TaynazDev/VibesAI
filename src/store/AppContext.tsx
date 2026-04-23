@@ -7,7 +7,7 @@ import {
   Dispatch,
 } from "react";
 import { mockNotifications, mockProjects } from "../data/mock";
-import type { AppNotification, Project, ProjectMessage } from "../data/mock";
+import type { AppNotification, Project, ProjectBuilderState, ProjectMessage } from "../data/mock";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -32,6 +32,9 @@ export type Settings = {
 export type AuthState = {
   name: string;
   email: string;
+  role: string;
+  studio: string;
+  focus: string;
 };
 
 type AppState = {
@@ -42,14 +45,18 @@ type AppState = {
 };
 
 type Action =
-  | { type: "PROJECT_CREATE"; name: string }
+  | { type: "PROJECT_CREATE"; id?: string; name: string; builder?: ProjectBuilderState }
+  | { type: "PROJECT_IMPORT"; project: Project }
   | { type: "PROJECT_RENAME"; id: string; name: string }
   | { type: "PROJECT_ARCHIVE"; id: string }
   | { type: "PROJECT_RESTORE"; id: string }
   | { type: "PROJECT_DELETE"; id: string }
   | { type: "PROJECT_ADD_MESSAGE"; id: string; message: Omit<ProjectMessage, "id"> }
+  | { type: "PROJECT_BUILDER_SAVE"; id: string; name: string; status: Project["status"]; builder: ProjectBuilderState }
   | { type: "NOTIFICATION_MARK_READ"; id: string }
   | { type: "NOTIFICATION_MARK_ALL_READ" }
+  | { type: "NOTIFICATION_CLEAR_READ" }
+  | { type: "NOTIFICATION_DELETE"; id: string }
   | { type: "NOTIFICATION_ADD"; notification: Omit<AppNotification, "id"> }
   | { type: "SETTINGS_UPDATE"; patch: Partial<Settings> }
   | { type: "AUTH_UPDATE"; patch: Partial<AuthState> };
@@ -72,6 +79,9 @@ const defaultSettings: Settings = {
 const defaultAuth: AuthState = {
   name: "Creator",
   email: "creator@prism.example",
+  role: "Founder",
+  studio: "Prism Studio",
+  focus: "Ship elegant AI-native apps fast",
 };
 
 const STORAGE_KEY = "vibesai_state_v1";
@@ -106,10 +116,36 @@ function reducer(state: AppState, action: Action): AppState {
       return {
         ...state,
         projects: [
-          { id: uid(), name: action.name, updatedAt: "just now", status: "Draft", messages: [] },
+          {
+            id: action.id ?? uid(),
+            name: action.name,
+            updatedAt: "just now",
+            status: action.builder ? "Active" : "Draft",
+            messages: [],
+            builder: action.builder,
+          },
           ...state.projects,
         ],
       };
+    case "PROJECT_IMPORT": {
+      const idTaken = state.projects.some((project) => project.id === action.project.id);
+      const nextProject = idTaken
+        ? {
+            ...action.project,
+            id: uid(),
+            name: `${action.project.name} (Imported)`,
+            updatedAt: "just now",
+          }
+        : {
+            ...action.project,
+            updatedAt: "just now",
+          };
+
+      return {
+        ...state,
+        projects: [nextProject, ...state.projects],
+      };
+    }
     case "PROJECT_RENAME":
       return {
         ...state,
@@ -142,6 +178,39 @@ function reducer(state: AppState, action: Action): AppState {
             : p
         ),
       };
+    case "PROJECT_BUILDER_SAVE": {
+      const existing = state.projects.find((p) => p.id === action.id);
+      if (!existing) {
+        return {
+          ...state,
+          projects: [
+            {
+              id: action.id,
+              name: action.name,
+              updatedAt: "just now",
+              status: action.status,
+              messages: [],
+              builder: action.builder,
+            },
+            ...state.projects,
+          ],
+        };
+      }
+      return {
+        ...state,
+        projects: state.projects.map((p) =>
+          p.id === action.id
+            ? {
+                ...p,
+                name: action.name,
+                status: action.status,
+                updatedAt: "just now",
+                builder: action.builder,
+              }
+            : p
+        ),
+      };
+    }
     case "NOTIFICATION_MARK_READ":
       return {
         ...state,
@@ -153,6 +222,16 @@ function reducer(state: AppState, action: Action): AppState {
       return {
         ...state,
         notifications: state.notifications.map((n) => ({ ...n, unread: false })),
+      };
+    case "NOTIFICATION_CLEAR_READ":
+      return {
+        ...state,
+        notifications: state.notifications.filter((n) => n.unread),
+      };
+    case "NOTIFICATION_DELETE":
+      return {
+        ...state,
+        notifications: state.notifications.filter((n) => n.id !== action.id),
       };
     case "NOTIFICATION_ADD":
       return {

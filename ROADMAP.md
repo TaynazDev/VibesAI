@@ -91,6 +91,40 @@ Save and reuse prompts.
   - Implementation: `useLocation` + index-based offset, `cos(offset * ARC_STEP)` for x-pull, `offset * ITEM_GAP` for y-offset, `transform: translate(xPull, yOffset)` on each button, spring transition `cubic-bezier(0.34, 1.56, 0.64, 1)`. The pill background is pushed `left: -58px` so only its right curved edge is visible.
   - Was partially implemented and reverted — see commit `f6bc5bd`
 
+- **Express Mode (1-stage builder)** — Add a mode switch in the top-right corner that runs a single fast stage from one prompt.
+  - Flow: user enters one prompt → AI plans, functionalises, and designs in one run → user is taken to an **Edit** page.
+  - Edit page: user can ask AI for targeted changes, AI returns proactive edit suggestions, and the page keeps a live preview.
+  - Output: include a prominent final download button after edits are complete.
+  - Needs: mode toggle UI (Standard vs Express), express pipeline prompt template, new `/edit` route, shared checkpoint/history model so Express edits still save to Projects.
+
+- **AI Critic Pass** — after each generation, run a second AI pass that scores UX clarity, visual hierarchy, accessibility, and performance with one-click fixes.
+- **Brand DNA Presets** — save reusable brand packs (colors, type, spacing, voice) and apply them instantly in builder and edit flows.
+- **Competitive Clone Mode** — paste a URL and let AI recreate an inspired, legally clean version of layout + interaction patterns.
+- **User Journey Simulator** — AI simulates multiple personas and reports friction points before export.
+- **Component Locking** — lock specific sections so later AI edits cannot modify them unless unlocked.
+- **Time Travel Editor** — visual timeline of major changes with preview snapshots and instant rollback.
+- **Mobile-First Toggle** — one switch that prioritizes touch targets, mobile nav, and compact responsive spacing.
+- **Prompt-to-Database Schema** — derive entities, fields, and relationships from the app prompt.
+- **Built-In Analytics Starter** — auto-inject event tracking scaffolding into generated apps.
+- **Collaboration Review Links** — share preview links where teammates can comment directly on UI elements.
+- **Conversion Mode** — design pass focused on landing-page conversion structure and persuasive CTA flow.
+- **Accessibility Hardening Mode** — one-click WCAG pass (contrast, focus, semantic structure, keyboard flow).
+- **Smart Naming Pass** — auto-rename sections/components/classes into clean semantic names.
+- **Auto Changelog** — every generation/edit creates a human-readable change summary.
+- **Template Marketplace** — community templates and prompt blueprints users can fork in one click.
+- **Voice-to-App Mode** — speak your app idea and refinements with real-time prompt cleanup before generation.
+- **Screenshot-to-UI Rebuild** — upload a screenshot and have AI recreate the interface as editable code.
+- **Business Logic Wizard** — guided setup for pricing rules, permissions, workflows, and validation.
+- **AI QA Test Generator** — auto-create test scenarios and click paths before export.
+- **Prompt Cost Estimator** — show token/cost estimate pre-run and suggest cheaper model alternatives.
+- **Undo Intent (Natural Language)** — commands like "undo just the typography change" for scoped rollback.
+- **Persona-Based Style Packs** — presets like Startup SaaS, Luxury Brand, and Creator Economy.
+- **Data Seeder** — generate realistic mock data for dashboards, lists, and forms.
+- **API Connection Mapper** — scaffold endpoint wiring, auth, loading states, and error handling from a short brief.
+- **Compliance Guardrails** — optional GDPR/accessibility/compliance-friendly defaults and copy.
+- **Multi-Page App Map** — AI proposes sitemap/routes first, then builds page-by-page with shared components.
+- **Release Readiness Score** — final pre-download checklist + score for UX, a11y, responsive, and performance.
+
 - **Diff view** — when Refactor mode returns output, show a side-by-side before/after diff
 - **Streaming responses** — stream GPT output token by token instead of waiting for the full response
 - **Multiple models** — let users pick GPT-4o, GPT-4o-mini, Claude, Gemini from a model picker

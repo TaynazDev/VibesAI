@@ -1,17 +1,16 @@
-import { useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { ChangeEvent, useMemo, useRef, useState } from "react";
+import { NavLink, useNavigate } from "react-router-dom";
 import { GlassPanel } from "../../components/GlassPanel";
-import { Modal } from "../../components/Modal";
+import type { Project } from "../../data/mock";
 import { useAppDispatch, useProjects } from "../../store/AppContext";
 
 export function ProjectsPage() {
   const projects = useProjects();
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
+  const importInputRef = useRef<HTMLInputElement>(null);
 
   const [query, setQuery] = useState("");
-  const [showCreate, setShowCreate] = useState(false);
-  const [newName, setNewName] = useState("");
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState("");
 
@@ -23,11 +22,42 @@ export function ProjectsPage() {
     [projects, query]
   );
 
-  const handleCreate = () => {
-    if (!newName.trim()) return;
-    dispatch({ type: "PROJECT_CREATE", name: newName.trim() });
-    setNewName("");
-    setShowCreate(false);
+  const exportProject = (project: Project) => {
+    const blob = new Blob([JSON.stringify(project, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${project.name.replace(/[^a-z0-9-]+/gi, "-").toLowerCase() || "project"}.vibesai.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const exportPreview = (project: Project) => {
+    if (!project.builder?.generatedCode) return;
+    const blob = new Blob([project.builder.generatedCode], { type: "text/html" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${project.name.replace(/[^a-z0-9-]+/gi, "-").toLowerCase() || "project"}.html`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const importProject = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    try {
+      const raw = await file.text();
+      const project = JSON.parse(raw) as Project;
+      if (!project.name || !project.id) {
+        throw new Error("Invalid project file.");
+      }
+      dispatch({ type: "PROJECT_IMPORT", project });
+    } catch {
+      window.alert("That file is not a valid VibesAI project export.");
+    } finally {
+      event.target.value = "";
+    }
   };
 
   const startRename = (id: string, current: string) => {
@@ -52,7 +82,7 @@ export function ProjectsPage() {
     <div className="page-stack">
       <header className="page-header">
         <h1>Projects</h1>
-        <p>Your VibesAI library. Double-click a name to rename inline.</p>
+        <p>Your VibesAI library. Builder sessions save here automatically, and you can import or export them.</p>
       </header>
 
       <GlassPanel>
@@ -63,16 +93,28 @@ export function ProjectsPage() {
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />
-          <button type="button" className="run-button" onClick={() => setShowCreate(true)}>
-            + New Project
-          </button>
+          <div className="project-toolbar-actions">
+            <button type="button" className="text-button" onClick={() => importInputRef.current?.click()}>
+              Import Project
+            </button>
+            <NavLink to="/" className="run-button project-build-link">
+              Open Builder →
+            </NavLink>
+          </div>
+          <input
+            ref={importInputRef}
+            type="file"
+            accept="application/json,.json"
+            hidden
+            onChange={importProject}
+          />
         </div>
       </GlassPanel>
 
       <GlassPanel title={`Library (${filtered.length})`}>
         {filtered.length === 0 ? (
           <p className="empty-state">
-            {query ? "No projects match your search." : "No projects yet. Create your first one above."}
+            {query ? "No projects match your search." : "No projects yet. Start in the builder or import a saved project."}
           </p>
         ) : (
           <ul className="list-grid">
@@ -105,7 +147,22 @@ export function ProjectsPage() {
                     >
                       {project.name}
                     </strong>
-                    <p>Updated {project.updatedAt}{project.messages?.length ? ` · ${project.messages.length} msg${project.messages.length !== 1 ? "s" : ""}` : ""}</p>
+                    <p>
+                      Updated {project.updatedAt}
+                      {project.messages?.length ? ` · ${project.messages.length} msg${project.messages.length !== 1 ? "s" : ""}` : ""}
+                      {project.builder ? ` · ${project.builder.checkpoints.length} checkpoints` : ""}
+                    </p>
+                    {project.builder && (
+                      <div className="project-list-builder-row">
+                        <span className="badge">Builder</span>
+                        <span className="badge muted">
+                          {project.builder.generatedCode ? "Live preview saved" : "Plan saved"}
+                        </span>
+                        <NavLink to={`/builder/${project.id}`} className="project-inline-link">
+                          Resume
+                        </NavLink>
+                      </div>
+                    )}
                   </div>
                 )}
 
@@ -113,6 +170,24 @@ export function ProjectsPage() {
                   <span className={`status ${project.status.toLowerCase()}`}>
                     {project.status}
                   </span>
+                  <button
+                    type="button"
+                    className="icon-btn"
+                    title="Export project package"
+                    onClick={() => exportProject(project)}
+                  >
+                    ⇩
+                  </button>
+                  {project.builder?.generatedCode && (
+                    <button
+                      type="button"
+                      className="icon-btn"
+                      title="Export live preview as HTML"
+                      onClick={() => exportPreview(project)}
+                    >
+                      ⤓
+                    </button>
+                  )}
                   <button
                     type="button"
                     className="icon-btn"
@@ -154,49 +229,6 @@ export function ProjectsPage() {
           </ul>
         )}
       </GlassPanel>
-
-      {showCreate && (
-        <Modal
-          title="New Project"
-          onClose={() => {
-            setShowCreate(false);
-            setNewName("");
-          }}
-        >
-          <label>
-            Project name
-            <input
-              autoFocus
-              value={newName}
-              onChange={(e) => setNewName(e.target.value)}
-              placeholder="e.g. Q3 Campaign Copy"
-              onKeyDown={(e) => {
-                if (e.key === "Enter") handleCreate();
-              }}
-            />
-          </label>
-          <div className="modal-actions">
-            <button
-              type="button"
-              className="text-button"
-              onClick={() => {
-                setShowCreate(false);
-                setNewName("");
-              }}
-            >
-              Cancel
-            </button>
-            <button
-              type="button"
-              className="run-button"
-              onClick={handleCreate}
-              disabled={!newName.trim()}
-            >
-              Create
-            </button>
-          </div>
-        </Modal>
-      )}
     </div>
   );
 }

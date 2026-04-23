@@ -1,7 +1,8 @@
 import { useCallback, useMemo, useRef, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { NavLink, useNavigate, useParams } from "react-router-dom";
 import { GlassPanel } from "../../components/GlassPanel";
 import { Spinner } from "../../components/Spinner";
+import { LivePreview } from "../builder/LivePreview";
 import { runAI, type AIMode, type AIOptions, type AIResult } from "../../services/aiService";
 import { useAppDispatch, useProjects, useSettings } from "../../store/AppContext";
 
@@ -70,6 +71,7 @@ export function ProjectDetailPage() {
           detail: `"${prompt.slice(0, 60)}${prompt.length > 60 ? "…" : ""}"`,
           timestamp: "just now",
           unread: true,
+          kind: "project",
         },
       });
       setPrompt("");
@@ -101,6 +103,10 @@ export function ProjectDetailPage() {
   }
 
   const messages = project.messages ?? [];
+  const builder = project.builder;
+  const builderStepLabel = builder
+    ? ["Plan", "Prototype", "Functionality", "Aesthetics", "Tweaking"][builder.currentStep]
+    : null;
 
   return (
     <div className="page-stack">
@@ -116,6 +122,44 @@ export function ProjectDetailPage() {
           </p>
         </div>
       </header>
+
+      {builder && (
+        <>
+          <GlassPanel title="Builder Snapshot">
+            <div className="project-builder-summary">
+              <div className="project-builder-meta">
+                <span className="status active">{builderStepLabel}</span>
+                <span className="badge">{builder.checkpoints.length} checkpoints</span>
+                <span className="badge">{builder.messages.length} builder messages</span>
+              </div>
+              {builder.plan && (
+                <>
+                  <h3 className="project-builder-name">{builder.plan.name}</h3>
+                  <p className="project-builder-tagline">{builder.plan.tagline}</p>
+                  <div className="plan-features">
+                    {builder.plan.features.slice(0, 6).map((feature, index) => (
+                      <span key={index} className="plan-feature-chip">{feature}</span>
+                    ))}
+                  </div>
+                </>
+              )}
+              <div className="plan-actions">
+                <NavLink to={`/builder/${project.id}`} className="run-button project-resume-link">
+                  Resume Builder →
+                </NavLink>
+              </div>
+            </div>
+          </GlassPanel>
+
+          {builder.generatedCode && (
+            <GlassPanel title="Live Preview">
+              <div className="project-preview-shell">
+                <LivePreview code={builder.generatedCode} />
+              </div>
+            </GlassPanel>
+          )}
+        </>
+      )}
 
       {/* ── Composer ──────────────────────────────── */}
       <div className="composer-wrap">

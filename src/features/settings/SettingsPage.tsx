@@ -1,26 +1,63 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { GlassPanel } from "../../components/GlassPanel";
-import { useAppDispatch, useSettings, type Settings } from "../../store/AppContext";
+import { useAppDispatch, useNotifications, useProjects, useSettings, type Settings } from "../../store/AppContext";
 
-const OPENROUTER_MODELS = [
-  { value: "google/gemma-3-27b-it",             label: "Gemma 3 27B (Google)" },
-  { value: "google/gemma-3-12b-it",             label: "Gemma 3 12B (Google)" },
-  { value: "meta-llama/llama-3.3-70b-instruct", label: "Llama 3.3 70B (Meta)" },
-  { value: "mistralai/mistral-7b-instruct",     label: "Mistral 7B Instruct" },
-  { value: "anthropic/claude-3.5-sonnet",       label: "Claude 3.5 Sonnet (Anthropic)" },
-  { value: "openai/gpt-4o-mini",                label: "GPT-4o mini (OpenAI via OR)" },
-  { value: "openai/gpt-4o",                     label: "GPT-4o (OpenAI via OR)" },
+const OPENROUTER_FREE_MODELS = [
+  { value: "google/gemma-2-9b-it:free", label: "Gemma 2 9B Instruct — Free" },
+  { value: "meta-llama/llama-3.2-3b-instruct:free", label: "Llama 3.2 3B Instruct — Free" },
+  { value: "microsoft/phi-3-mini-128k-instruct:free", label: "Phi-3 Mini 128K — Free" },
+  { value: "qwen/qwen-2.5-7b-instruct:free", label: "Qwen 2.5 7B Instruct — Free" },
+  { value: "mistralai/mistral-7b-instruct:free", label: "Mistral 7B Instruct — Free" },
+];
+
+const OPENROUTER_PAID_MODELS = [
+  { value: "openai/gpt-4o", label: "GPT-4o" },
+  { value: "openai/gpt-4o-mini", label: "GPT-4o mini" },
+  { value: "anthropic/claude-3.5-sonnet", label: "Claude 3.5 Sonnet" },
+  { value: "google/gemini-2.5-pro-preview", label: "Gemini 2.5 Pro" },
+  { value: "meta-llama/llama-3.3-70b-instruct", label: "Llama 3.3 70B Instruct" },
 ];
 
 export function SettingsPage() {
   const settings = useSettings();
   const dispatch = useAppDispatch();
+  const projects = useProjects();
+  const { notifications } = useNotifications();
   const [showOpenAI, setShowOpenAI] = useState(false);
   const [showOR, setShowOR] = useState(false);
   const [showGemma, setShowGemma] = useState(false);
 
+  const currentOpenRouterOption = useMemo(() => {
+    const curated = [...OPENROUTER_FREE_MODELS, ...OPENROUTER_PAID_MODELS];
+    if (curated.some((model) => model.value === settings.openrouterModel)) {
+      return null;
+    }
+    return {
+      value: settings.openrouterModel,
+      label: `${settings.openrouterModel} — Current`,
+    };
+  }, [settings.openrouterModel]);
+
   const update = (patch: Partial<Settings>) =>
     dispatch({ type: "SETTINGS_UPDATE", patch });
+
+  const providerCards = [
+    {
+      label: "OpenAI",
+      ready: Boolean(settings.apiKey),
+      body: "Best for text + DALL·E image generation.",
+    },
+    {
+      label: "OpenRouter",
+      ready: Boolean(settings.openrouterKey),
+      body: `Routes through ${settings.openrouterModel.split("/").pop() ?? "selected model"}.`,
+    },
+    {
+      label: "Gemma",
+      ready: Boolean(settings.gemmaKey),
+      body: "Direct Google AI Studio access for Gemma models.",
+    },
+  ];
 
   return (
     <div className="page-stack">
@@ -28,6 +65,40 @@ export function SettingsPage() {
         <h1>Settings</h1>
         <p>Beginner defaults are on. Advanced controls are in the section below when you need them.</p>
       </header>
+
+      <div className="stats-grid">
+        <GlassPanel className="stat-panel">
+          <span className="stat-label">Active Provider</span>
+          <strong className="stat-value stat-value--compact">{settings.provider}</strong>
+          <p className="stat-copy">Current generation engine.</p>
+        </GlassPanel>
+        <GlassPanel className="stat-panel">
+          <span className="stat-label">Projects</span>
+          <strong className="stat-value">{projects.length}</strong>
+          <p className="stat-copy">Saved in your local workspace.</p>
+        </GlassPanel>
+        <GlassPanel className="stat-panel">
+          <span className="stat-label">Notifications</span>
+          <strong className="stat-value">{notifications.length}</strong>
+          <p className="stat-copy">Activity stored locally.</p>
+        </GlassPanel>
+      </div>
+
+      <GlassPanel title="Provider Readiness">
+        <div className="provider-grid">
+          {providerCards.map((provider) => (
+            <div key={provider.label} className={`provider-card${provider.ready ? " provider-card--ready" : ""}`}>
+              <div className="provider-card-top">
+                <strong>{provider.label}</strong>
+                <span className={provider.ready ? "badge" : "badge muted"}>
+                  {provider.ready ? "Ready" : "Missing key"}
+                </span>
+              </div>
+              <p>{provider.body}</p>
+            </div>
+          ))}
+        </div>
+      </GlassPanel>
 
       <GlassPanel title="General">
         <div className="form-grid">
@@ -131,11 +202,21 @@ export function SettingsPage() {
               value={settings.openrouterModel}
               onChange={(e) => update({ openrouterModel: e.target.value })}
             >
-              {OPENROUTER_MODELS.map((m) => (
-                <option key={m.value} value={m.value}>{m.label}</option>
-              ))}
+              {currentOpenRouterOption && (
+                <option value={currentOpenRouterOption.value}>{currentOpenRouterOption.label}</option>
+              )}
+              <optgroup label="Free Models">
+                {OPENROUTER_FREE_MODELS.map((m) => (
+                  <option key={m.value} value={m.value}>{m.label}</option>
+                ))}
+              </optgroup>
+              <optgroup label="Paid Models">
+                {OPENROUTER_PAID_MODELS.map((m) => (
+                  <option key={m.value} value={m.value}>{m.label}</option>
+                ))}
+              </optgroup>
             </select>
-            <p className="input-hint">Used when provider is set to OpenRouter.</p>
+            <p className="input-hint">Five curated free models first, then the top five commonly used paid models.</p>
           </label>
 
           {/* Google AI Studio / Gemma key */}
@@ -191,6 +272,33 @@ export function SettingsPage() {
               <option value="on">On</option>
             </select>
           </label>
+        </div>
+      </GlassPanel>
+
+      <GlassPanel title="Workspace Data">
+        <div className="workspace-actions">
+          <div className="workspace-action-card">
+            <strong>Notifications hygiene</strong>
+            <p>Clear all already-read items while keeping unread alerts visible.</p>
+            <button
+              type="button"
+              className="text-button"
+              onClick={() => dispatch({ type: "NOTIFICATION_CLEAR_READ" })}
+            >
+              Clear read notifications
+            </button>
+          </div>
+          <div className="workspace-action-card">
+            <strong>Builder resume target</strong>
+            <p>Forget the currently resumed builder project so home starts fresh next time.</p>
+            <button
+              type="button"
+              className="text-button"
+              onClick={() => sessionStorage.removeItem("va_builder_project_id")}
+            >
+              Forget active builder session
+            </button>
+          </div>
         </div>
       </GlassPanel>
     </div>
