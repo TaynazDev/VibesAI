@@ -1,406 +1,234 @@
-﻿import { useCallback, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { NavLink } from "react-router-dom";
 import { GlassPanel } from "../../components/GlassPanel";
 import { Spinner } from "../../components/Spinner";
-import { runAI, type AIMode, type AIOptions, type AIResult } from "../../services/aiService";
+import { runAI, type AIOptions } from "../../services/aiService";
 import { useAppDispatch, useSettings } from "../../store/AppContext";
 
-const aiModes: AIMode[] = ["Generate", "Refactor", "Image"];
-
-type HistoryEntry = {
+type ChatMessage = {
   id: string;
-  prompt: string;
-  mode: AIMode;
-  result: AIResult;
-  ts: string;
+  role: "user" | "ai";
+  content: string;
+  timestamp: string;
 };
 
-const isMac = /Mac|iPhone|iPad|iPod/.test(navigator.userAgent);
-const runKey = isMac ? "⌘" : "Ctrl";
+const uid = () => Math.random().toString(36).slice(2, 10);
 
-const modeIcon: Record<AIMode, string> = {
-  Generate: "✦",
-  Refactor: "⟳",
-  Image:    "◈",
+const DEFAULT_OPTIONS: AIOptions = {
+  creativity: 62,
+  length: "balanced",
+  references: true,
 };
 
-const modeHint: Record<AIMode, string> = {
-  Generate: "Ask anything…",
-  Refactor: "Paste content to refactor…",
-  Image:    "Describe an image to generate…",
-};
-
-const SUGGESTIONS: { label: string; prompt: string; mode: AIMode }[] = [
-  { label: "✦ Write a blog intro",       prompt: "Write an engaging intro for a blog post about the future of AI in everyday life.", mode: "Generate" },
-  { label: "◈ Futuristic city concept",  prompt: "A futuristic neon-lit city at night, flying cars, towering glass skyscrapers, cinematic lighting, ultra detailed", mode: "Image" },
-  { label: "⟳ Make this more compelling", prompt: "Refactor the following to be more compelling and clear:\n\n", mode: "Refactor" },
-  { label: "✦ Explain quantum computing", prompt: "Explain quantum computing in simple terms, with a real-world analogy.", mode: "Generate" },
+const STARTERS = [
+  "Help me design a modern onboarding flow.",
+  "Give me a launch checklist for my SaaS app.",
+  "Refine this feature idea into clear user stories.",
+  "Draft a clean pricing page section with copy.",
 ];
 
-const COMING_SOON: { icon: string; title: string; desc: string }[] = [
-  {
-    icon: "🧠",
-    title: "Memory & Context",
-    desc: "Let the AI remember your preferences, past projects, and style across sessions.",
-  },
-  {
-    icon: "🔗",
-    title: "App Integrations",
-    desc: "Connect VibesAI to Notion, GitHub, Figma, Slack and more to trigger AI from anywhere.",
-  },
-  {
-    icon: "🎙️",
-    title: "Voice Input",
-    desc: "Speak your prompt out loud — real-time transcription feeds straight into the composer.",
-  },
-  {
-    icon: "🤖",
-    title: "Custom AI Agents",
-    desc: "Build and save reusable agents with system prompts, tools, and custom personas.",
-  },
-  {
-    icon: "📂",
-    title: "File & Doc Analysis",
-    desc: "Upload PDFs, images, spreadsheets or code files and ask questions about them.",
-  },
-  {
-    icon: "✏️",
-    title: "Inline Editor",
-    desc: "Highlight any text anywhere in the app and ask AI to rewrite, expand, or summarise it.",
-  },
-  {
-    icon: "🎨",
-    title: "Image Editing",
-    desc: "Inpainting, outpainting, and style transfer on top of generated or uploaded images.",
-  },
-  {
-    icon: "📊",
-    title: "Analytics Dashboard",
-    desc: "Track token usage, cost, generation history, and model performance over time.",
-  },
-  {
-    icon: "🔒",
-    title: "Team Workspaces",
-    desc: "Invite collaborators, share prompts, and manage API keys across an organisation.",
-  },
-  {
-    icon: "⚡",
-    title: "Prompt Library",
-    desc: "Save, tag, and reuse your best prompts. Import community templates in one click.",
-  },
-];
+function buildChatPrompt(messages: ChatMessage[], userInput: string): string {
+  const transcript = [...messages, { id: "latest", role: "user" as const, content: userInput, timestamp: "now" }]
+    .map((msg) => `${msg.role === "user" ? "User" : "Assistant"}: ${msg.content}`)
+    .join("\n\n");
+
+  return [
+    "You are VibesAI's chat assistant.",
+    "Respond naturally and helpfully as a normal conversational AI assistant.",
+    "Keep continuity with prior messages.",
+    "Conversation:",
+    transcript,
+    "Assistant:",
+  ].join("\n");
+}
 
 export function HomePage() {
   const dispatch = useAppDispatch();
   const settings = useSettings();
+  const providerLabel = settings.provider === "openrouter"
+    ? "OpenRouter"
+    : settings.provider === "gemma"
+      ? "Gemma"
+      : "OpenAI";
+
   const hasApiKey =
     (settings.provider === "openrouter" && Boolean(settings.openrouterKey)) ||
     (settings.provider === "gemma" && Boolean(settings.gemmaKey)) ||
     Boolean(settings.apiKey);
 
-  const [prompt, setPrompt] = useState("");
-  const [mode, setMode] = useState<AIMode>("Generate");
-  const [opts, setOpts] = useState<AIOptions>({
-    creativity: 62,
-    length: "balanced",
-    references: true,
-  });
-  const [showAdvanced, setShowAdvanced] = useState(false);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [input, setInput] = useState("");
   const [isRunning, setIsRunning] = useState(false);
-  const [result, setResult] = useState<AIResult | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [history, setHistory] = useState<HistoryEntry[]>([]);
-  const resultRef = useRef<HTMLDivElement>(null);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const messagesRef = useRef<ChatMessage[]>([]);
+  const endRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
 
-  const runPrompt = useCallback(async () => {
-    if (!prompt.trim() || isRunning) return;
-    setIsRunning(true);
+  useEffect(() => {
+    messagesRef.current = messages;
+  }, [messages]);
+
+  useEffect(() => {
+    endRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+  }, [messages, isRunning]);
+
+  const placeholder = useMemo(() => {
+    if (!hasApiKey) {
+      return `Add your ${providerLabel} key in Settings to start chatting…`;
+    }
+    return "Send a message…";
+  }, [hasApiKey, providerLabel]);
+
+  async function sendMessage(overrideText?: string) {
+    const content = (overrideText ?? input).trim();
+    if (!content || isRunning || !hasApiKey) {
+      return;
+    }
+
+    const userMessage: ChatMessage = {
+      id: uid(),
+      role: "user",
+      content,
+      timestamp: new Date().toLocaleTimeString(),
+    };
+
+    const baseMessages = messagesRef.current;
+    setMessages([...baseMessages, userMessage]);
+    setInput("");
+    if (inputRef.current) {
+      inputRef.current.style.height = "auto";
+    }
     setError(null);
-    setResult(null);
+    setIsRunning(true);
+
     try {
-      const r = await runAI(mode, prompt, opts);
-      setResult(r);
-      setHistory((prev) => [
-        { id: String(Date.now()), prompt, mode, result: r, ts: new Date().toLocaleTimeString() },
-        ...prev.slice(0, 9),
-      ]);
+      const prompt = buildChatPrompt(baseMessages, content);
+      const result = await runAI("Generate", prompt, DEFAULT_OPTIONS);
+      if (result.type !== "text") {
+        throw new Error("Unexpected non-text response.");
+      }
+
+      const aiMessage: ChatMessage = {
+        id: uid(),
+        role: "ai",
+        content: result.content,
+        timestamp: new Date().toLocaleTimeString(),
+      };
+      setMessages((prev) => [...prev, aiMessage]);
+
       dispatch({
         type: "NOTIFICATION_ADD",
         notification: {
-          title: `${mode} complete`,
-          detail: `"${prompt.slice(0, 60)}${prompt.length > 60 ? "…" : ""}"`,
+          title: "AI Chat reply ready",
+          detail: result.content.slice(0, 88),
           timestamp: "just now",
           unread: true,
         },
       });
-      setTimeout(
-        () => resultRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" }),
-        80
-      );
     } catch (e: unknown) {
       if (e instanceof Error && e.message === "NO_API_KEY") {
         setError("NO_API_KEY");
       } else {
-        setError(e instanceof Error ? e.message : "Something went wrong. Try again.");
+        setError(e instanceof Error ? e.message : "Something went wrong. Please try again.");
       }
     } finally {
       setIsRunning(false);
     }
-  }, [dispatch, isRunning, mode, opts, prompt]);
-
-  const copyResult = () => {
-    if (result?.type === "text") {
-      navigator.clipboard.writeText(result.content).catch(() => {});
-    }
-  };
-
-  const applySuggestion = (s: (typeof SUGGESTIONS)[number]) => {
-    setMode(s.mode);
-    setPrompt(s.prompt);
-    setResult(null);
-    setError(null);
-    setTimeout(() => textareaRef.current?.focus(), 50);
-  };
-
-  const placeholder = useMemo(() => {
-    if (!hasApiKey) return "Add your OpenAI key in Settings to get started…";
-    return modeHint[mode];
-  }, [hasApiKey, mode]);
+  }
 
   return (
     <div className="page-stack home-page">
-      {/* ── Hero ──────────────────────────────────── */}
       <header className="hero">
-        <h1>What will you create?</h1>
-        <p className="hero-copy">Powered by GPT-4o-mini and DALL·E 3</p>
+        <h1>AI Chat</h1>
+        <p className="hero-copy">Uses your configured {providerLabel} key from Settings</p>
       </header>
 
-      {/* ── No API key banner ─────────────────────── */}
       {!hasApiKey && (
         <div className="api-key-banner">
-          <span>Connect your OpenAI API key to enable AI features.</span>
+          <span>Connect your {providerLabel} API key to enable AI chat.</span>
           <NavLink to="/settings" className="banner-cta">Add key →</NavLink>
         </div>
       )}
 
-      {/* ── Composer (ChatGPT-style) ──────────────── */}
-      <div className="composer-wrap">
-        <GlassPanel>
-          <label htmlFor="prompt" className="sr-only">Prompt</label>
-          <textarea
-            ref={textareaRef}
-            id="prompt"
-            className="prompt-input"
-            placeholder={placeholder}
-            value={prompt}
-            rows={1}
-            disabled={!hasApiKey}
-            onChange={(e) => {
-              setPrompt(e.target.value);
-              // Auto-expand height
-              const el = e.target;
-              el.style.height = "auto";
-              el.style.height = `${Math.min(el.scrollHeight, 240)}px`;
-            }}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) runPrompt();
-            }}
-          />
+      <GlassPanel>
+        <div className="chat-messages" style={{ maxHeight: "58vh", minHeight: "48vh" }}>
+          {messages.length === 0 && !isRunning && (
+            <div className="chat-empty">Start a conversation with AI.</div>
+          )}
 
-          {/* Bottom strip: mode chips (left) + actions (right) */}
-          <div className="bar-footer">
-            <div className="bar-mode-chips" role="tablist" aria-label="AI mode">
-              {aiModes.map((m) => (
+          {messages.length === 0 && hasApiKey && (
+            <div className="suggestion-row" style={{ marginBottom: "0.75rem" }}>
+              {STARTERS.map((starter) => (
                 <button
-                  key={m}
-                  className={m === mode ? "bar-chip active" : "bar-chip"}
-                  onClick={() => { setMode(m); setResult(null); setError(null); }}
-                  role="tab"
-                  aria-selected={m === mode}
+                  key={starter}
                   type="button"
+                  className="suggestion-chip"
+                  onClick={() => sendMessage(starter)}
+                  disabled={isRunning}
                 >
-                  {modeIcon[m]} {m}
+                  {starter}
                 </button>
               ))}
             </div>
-
-            <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-              {prompt.trim() && !isRunning && (
-                <span className="input-hint">{runKey}+↵</span>
-              )}
-              <button
-                type="button"
-                className="text-button"
-                onClick={() => setShowAdvanced((v) => !v)}
-                aria-expanded={showAdvanced}
-                title="Options"
-                style={{ fontSize: "1rem" }}
-              >
-                ⚙
-              </button>
-              <button
-                type="button"
-                className="send-btn"
-                onClick={runPrompt}
-                disabled={isRunning || !prompt.trim() || !hasApiKey}
-                aria-label="Run"
-              >
-                {isRunning ? <Spinner label="Running" /> : "↑"}
-              </button>
-            </div>
-          </div>
-
-          {showAdvanced && (
-            <div className="advanced-grid" style={{ marginTop: "0.7rem" }}>
-              <label>
-                Creativity: {opts.creativity}%
-                <input
-                  type="range" min="0" max="100"
-                  value={opts.creativity}
-                  onChange={(e) => setOpts((o) => ({ ...o, creativity: Number(e.target.value) }))}
-                />
-              </label>
-              <label>
-                Length
-                <select
-                  value={opts.length}
-                  onChange={(e) => setOpts((o) => ({ ...o, length: e.target.value as AIOptions["length"] }))}
-                >
-                  <option value="concise">Concise</option>
-                  <option value="balanced">Balanced</option>
-                  <option value="expanded">Expanded</option>
-                </select>
-              </label>
-              <label>
-                References
-                <select
-                  value={opts.references ? "yes" : "no"}
-                  onChange={(e) => setOpts((o) => ({ ...o, references: e.target.value === "yes" }))}
-                >
-                  <option value="yes">Yes</option>
-                  <option value="no">No</option>
-                </select>
-              </label>
-            </div>
           )}
-        </GlassPanel>
-      </div>
 
-      {/* ── Suggestion starters ───────────────────── */}
-      {!result && !error && hasApiKey && !prompt.trim() && (
-        <div className="composer-wrap">
-          <div className="suggestion-row">
-            {SUGGESTIONS.map((s) => (
-              <button
-                key={s.label}
-                type="button"
-                className="suggestion-chip"
-                onClick={() => applySuggestion(s)}
-              >
-                {s.label}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* ── Errors ────────────────────────────────── */}
-      {error === "NO_API_KEY" && (
-        <div className="composer-wrap">
-          <GlassPanel>
-            <p className="error-text">
-              No API key set.{" "}
-              <NavLink to="/settings" style={{ display: "inline", color: "var(--accent)" }}>
-                Go to Settings →
-              </NavLink>
-            </p>
-          </GlassPanel>
-        </div>
-      )}
-      {error && error !== "NO_API_KEY" && (
-        <div className="composer-wrap">
-          <GlassPanel>
-            <p className="error-text">⚠ {error}</p>
-          </GlassPanel>
-        </div>
-      )}
-
-      {/* ── Result ────────────────────────────────── */}
-      {result && (
-        <div ref={resultRef} className="composer-wrap fade-in">
-          <GlassPanel title={`${mode} Result`}>
-            <div className="result-toolbar">
-              {result.type === "text" ? (
-                <>
-                  <span className="result-meta">{result.wordCount} words</span>
-                  <button type="button" className="text-button" onClick={copyResult}>Copy</button>
-                  <button type="button" className="text-button" onClick={runPrompt}>Regenerate</button>
-                </>
-              ) : (
-                <>
-                  <span className="result-meta">Image generated</span>
-                  <a href={result.url} target="_blank" rel="noreferrer" className="text-button">
-                    Open full size ↗
-                  </a>
-                </>
-              )}
-            </div>
-            {result.type === "text" ? (
-              <pre className="result-box">{result.content}</pre>
-            ) : (
-              <img src={result.url} alt={result.alt} className="result-image" loading="lazy" />
-            )}
-          </GlassPanel>
-        </div>
-      )}
-
-      {/* ── History ───────────────────────────────── */}
-      {history.length > 0 && (
-        <div className="composer-wrap">
-          <GlassPanel title="Recent runs">
-            <ul className="list-grid">
-              {history.map((h) => (
-                <li
-                  key={h.id}
-                  className="list-item history-item"
-                  onClick={() => { setPrompt(h.prompt); setMode(h.mode); setResult(h.result); setError(null); }}
-                  role="button"
-                  tabIndex={0}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" || e.key === " ") {
-                      setPrompt(h.prompt); setMode(h.mode); setResult(h.result);
-                    }
-                  }}
-                >
-                  <div>
-                    <strong style={{ fontSize: "0.86rem" }}>{modeIcon[h.mode]} {h.mode}</strong>
-                    <p>"{h.prompt.slice(0, 72)}{h.prompt.length > 72 ? "…" : ""}"</p>
-                  </div>
-                  <span className="result-meta">{h.ts}</span>
-                </li>
-              ))}
-            </ul>
-          </GlassPanel>
-        </div>
-      )}
-
-      {/* ── Coming Soon ───────────────────────────── */}
-      <div className="composer-wrap">
-        <div className="coming-soon-label">Coming soon</div>
-        <div className="coming-soon-grid">
-          {COMING_SOON.map((f) => (
-            <div key={f.title} className="coming-soon-card glass">
-              <span className="coming-soon-icon" aria-hidden="true">{f.icon}</span>
-              <div>
-                <p className="coming-soon-title">{f.title}</p>
-                <p className="coming-soon-desc">{f.desc}</p>
-              </div>
-              <span className="coming-soon-pill">Soon</span>
+          {messages.map((msg) => (
+            <div key={msg.id} className={`chat-msg chat-msg--${msg.role}`}>
+              <div className="chat-msg-bubble">{msg.content}</div>
             </div>
           ))}
+
+          {isRunning && (
+            <div className="chat-msg chat-msg--ai">
+              <div className="chat-msg-bubble chat-loading">
+                <Spinner /> <span>Thinking…</span>
+              </div>
+            </div>
+          )}
+
+          <div ref={endRef} />
         </div>
-      </div>
+
+        {error === "NO_API_KEY" && (
+          <p className="error-text" style={{ marginTop: "0.75rem" }}>
+            No API key set. <NavLink to="/settings" style={{ color: "var(--accent)" }}>Go to Settings →</NavLink>
+          </p>
+        )}
+        {error && error !== "NO_API_KEY" && (
+          <p className="error-text" style={{ marginTop: "0.75rem" }}>⚠ {error}</p>
+        )}
+
+        <div className="chat-input-area" style={{ marginTop: "0.75rem" }}>
+          <textarea
+            ref={inputRef}
+            className="chat-input"
+            placeholder={placeholder}
+            value={input}
+            rows={2}
+            disabled={isRunning || !hasApiKey}
+            onChange={(e) => {
+              setInput(e.target.value);
+              const el = e.target;
+              el.style.height = "auto";
+              el.style.height = `${Math.min(el.scrollHeight, 140)}px`;
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+                void sendMessage();
+              }
+            }}
+          />
+          <div className="chat-input-btns">
+            <button
+              className="run-button"
+              onClick={() => void sendMessage()}
+              disabled={!input.trim() || isRunning || !hasApiKey}
+            >
+              {isRunning ? <Spinner /> : "Send"}
+            </button>
+          </div>
+        </div>
+      </GlassPanel>
     </div>
   );
 }

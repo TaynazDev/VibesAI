@@ -40,9 +40,10 @@ function extractJSON(text: string): Record<string, unknown> | null {
 
 type Msg = { role: string; content: string };
 
-async function callOpenAI(messages: Msg[], apiKey: string): Promise<string> {
+async function callOpenAI(messages: Msg[], apiKey: string, signal?: AbortSignal): Promise<string> {
   const res = await fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",
+    signal,
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
     body: JSON.stringify({
       model: "gpt-4o-mini",
@@ -57,9 +58,10 @@ async function callOpenAI(messages: Msg[], apiKey: string): Promise<string> {
   return data.choices[0].message.content ?? "";
 }
 
-async function callOpenRouter(messages: Msg[], apiKey: string, model: string): Promise<string> {
+async function callOpenRouter(messages: Msg[], apiKey: string, model: string, signal?: AbortSignal): Promise<string> {
   const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
     method: "POST",
+    signal,
     headers: {
       "Content-Type": "application/json",
       Authorization: `Bearer ${apiKey}`,
@@ -73,7 +75,7 @@ async function callOpenRouter(messages: Msg[], apiKey: string, model: string): P
   return data.choices[0].message.content ?? "";
 }
 
-async function callGemma(systemPrompt: string, history: Msg[], apiKey: string): Promise<string> {
+async function callGemma(systemPrompt: string, history: Msg[], apiKey: string, signal?: AbortSignal): Promise<string> {
   const contents = history.map((m) => ({
     role: m.role === "assistant" ? "model" : "user",
     parts: [{ text: m.content }],
@@ -82,6 +84,7 @@ async function callGemma(systemPrompt: string, history: Msg[], apiKey: string): 
     `https://generativelanguage.googleapis.com/v1beta/models/gemma-3-27b-it:generateContent?key=${encodeURIComponent(apiKey)}`,
     {
       method: "POST",
+      signal,
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         systemInstruction: { parts: [{ text: systemPrompt }] },
@@ -95,21 +98,21 @@ async function callGemma(systemPrompt: string, history: Msg[], apiKey: string): 
   return data.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
 }
 
-async function callAI(systemPrompt: string, history: Msg[]): Promise<string> {
+async function callAI(systemPrompt: string, history: Msg[], signal?: AbortSignal): Promise<string> {
   const s = getSettings();
   const provider = s.provider ?? "openai";
   const messages: Msg[] = [{ role: "system", content: systemPrompt }, ...history];
 
   if (provider === "openrouter") {
     if (!s.openrouterKey) throw new Error("NO_API_KEY");
-    return callOpenRouter(messages, s.openrouterKey, s.openrouterModel ?? "google/gemma-3-27b-it");
+    return callOpenRouter(messages, s.openrouterKey, s.openrouterModel ?? "google/gemma-3-27b-it", signal);
   }
   if (provider === "gemma") {
     if (!s.gemmaKey) throw new Error("NO_API_KEY");
-    return callGemma(systemPrompt, history, s.gemmaKey);
+    return callGemma(systemPrompt, history, s.gemmaKey, signal);
   }
   if (!s.apiKey) throw new Error("NO_API_KEY");
-  return callOpenAI(messages, s.apiKey);
+  return callOpenAI(messages, s.apiKey, signal);
 }
 
 // ── System prompts ───────────────────────────────────────────────────────
@@ -191,10 +194,11 @@ export async function runBuilderStep(
   currentCode: string,
   history: Msg[],
   userMessage: string,
+  signal?: AbortSignal,
 ): Promise<BuilderResponse> {
   const sysPrompt = stepSystemPrompt(step, plan, currentCode);
   const fullHistory = [...history, { role: "user", content: userMessage }];
-  const raw = await callAI(sysPrompt, fullHistory);
+  const raw = await callAI(sysPrompt, fullHistory, signal);
   const parsed = extractJSON(raw);
   if (!parsed) {
     return {

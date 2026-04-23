@@ -20,14 +20,14 @@ const EMPTY_HTML = `<!DOCTYPE html>
 </body>
 </html>`;
 
-export function LivePreview({ code }: { code: string }) {
+export function LivePreview({ code, reloadNonce = 0 }: { code: string; reloadNonce?: number }) {
   const ref = useRef<HTMLIFrameElement>(null);
 
   useEffect(() => {
     if (ref.current) {
       ref.current.srcdoc = code || EMPTY_HTML;
     }
-  }, [code]);
+  }, [code, reloadNonce]);
 
   return (
     <iframe

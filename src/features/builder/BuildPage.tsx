@@ -129,12 +129,50 @@ export function BuildPage() {
   const [aestheticOptions, setAestheticOptions] = useState<string[]>([]);
   const [selectedAesthetic, setSelectedAesthetic] = useState<string>("");
   const [customAesthetic, setCustomAesthetic] = useState("");
+  const [previewReloadNonce, setPreviewReloadNonce] = useState(0);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const chatInputRef = useRef<HTMLTextAreaElement>(null);
   const autoStarted = useRef<Set<number>>(new Set());
   const hydratedProjectId = useRef<string | null>(null);
   const lastSavedSnapshot = useRef("");
+  const mountedRef = useRef(true);
+  const activeRequestRef = useRef<{ controller: AbortController; step: BuildStep } | null>(null);
+  const stepRef = useRef(step);
+  const planRef = useRef(plan);
+  const currentCodeRef = useRef(currentCode);
+  const checkpointsRef = useRef(checkpoints);
+  const messagesRef = useRef(messages);
+  const stepHistoryRef = useRef(stepHistory);
+  const currentProjectIdRef = useRef<string | null>(currentProjectId);
+
+  useEffect(() => {
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    stepRef.current = step;
+  }, [step]);
+  useEffect(() => {
+    planRef.current = plan;
+  }, [plan]);
+  useEffect(() => {
+    currentCodeRef.current = currentCode;
+  }, [currentCode]);
+  useEffect(() => {
+    checkpointsRef.current = checkpoints;
+  }, [checkpoints]);
+  useEffect(() => {
+    messagesRef.current = messages;
+  }, [messages]);
+  useEffect(() => {
+    stepHistoryRef.current = stepHistory;
+  }, [stepHistory]);
+  useEffect(() => {
+    currentProjectIdRef.current = currentProjectId;
+  }, [currentProjectId]);
 
   useEffect(() => {
     if (routeProjectId && routeProjectId !== currentProjectId) {
@@ -220,42 +258,78 @@ export function BuildPage() {
     setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: "smooth" }), 80);
   }
 
-  function saveCheckpoint(s: BuildStep, code: string, label: string) {
-    setCheckpoints((prev) => [
-      { id: uid(), step: s, code, timestamp: new Date().toLocaleTimeString(), label: label.slice(0, 60) },
-      ...prev,
-    ]);
-  }
-
   // ── AI chat ──────────────────────────────────────────────────────────
 
   async function doChat(userMessage: string, targetStep?: BuildStep) {
     const s = targetStep ?? step;
     if (!userMessage.trim() || isLoading) return;
     setIsLoading(true);
+    const controller = new AbortController();
+    activeRequestRef.current = { controller, step: s };
 
     const isSilentIntro = targetStep !== undefined; // auto-start — don't show user bubble
+    const userMsgEntry: BuildMessage | null = isSilentIntro
+      ? null
+      : {
+          id: uid(),
+          step: s,
+          role: "user",
+          content: userMessage,
+          timestamp: new Date().toLocaleTimeString(),
+        };
+    const baseMessages = messagesRef.current;
+
     if (!isSilentIntro) {
-      addMsg(s, "user", userMessage);
+      setMessages([...baseMessages, userMsgEntry as BuildMessage]);
       setChatInput("");
       if (chatInputRef.current) chatInputRef.current.style.height = "auto";
     }
 
-    const history = stepHistory[s] ?? [];
+    const history = stepHistoryRef.current[s] ?? [];
     const waitingForAestheticChoice = s === 3 && !selectedAesthetic;
     try {
-      const response = await runBuilderStep(s, plan, currentCode, history, userMessage);
+      const response = await runBuilderStep(
+        s,
+        planRef.current,
+        currentCodeRef.current,
+        history,
+        userMessage,
+        controller.signal,
+      );
 
-      setStepHistory((prev) => ({
-        ...prev,
+      const nextStepHistory: Record<number, { role: string; content: string }[]> = {
+        ...stepHistoryRef.current,
         [s]: [
           ...history,
           { role: "user", content: userMessage },
           { role: "assistant", content: response.message },
         ],
-      }));
+      };
+      const aiMsg: BuildMessage = {
+        id: uid(),
+        step: s,
+        role: "ai",
+        content: response.message,
+        suggestions: response.suggestions,
+        timestamp: new Date().toLocaleTimeString(),
+      };
+      const nextMessages = [
+        ...baseMessages,
+        ...(userMsgEntry ? [userMsgEntry] : []),
+        aiMsg,
+      ];
 
-      addMsg(s, "ai", response.message, response.suggestions);
+      let nextCode = currentCodeRef.current;
+      let nextCheckpoints = checkpointsRef.current;
+
+      if (mountedRef.current) {
+        setStepHistory(nextStepHistory);
+      }
+
+      if (mountedRef.current) {
+        setMessages(nextMessages);
+        setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: "smooth" }), 80);
+      }
       dispatch({
         type: "NOTIFICATION_ADD",
         notification: {
@@ -269,38 +343,106 @@ export function BuildPage() {
 
       if (waitingForAestheticChoice) {
         const options = (response.suggestions ?? []).filter(Boolean).slice(0, 3);
-        setAestheticOptions(
-          options.length > 0
-            ? options
-            : [
-                "Clean Glass Minimal",
-                "Bold Neon Futuristic",
-                "Soft Editorial Premium",
-              ]
-        );
+        if (mountedRef.current) {
+          setAestheticOptions(
+            options.length > 0
+              ? options
+              : [
+                  "Clean Glass Minimal",
+                  "Bold Neon Futuristic",
+                  "Soft Editorial Premium",
+                ]
+          );
+        }
+
+        if (currentProjectIdRef.current && planRef.current) {
+          dispatch({
+            type: "PROJECT_BUILDER_SAVE",
+            id: currentProjectIdRef.current,
+            name: planRef.current.name,
+            status: nextCode || stepRef.current > 0 ? "Active" : "Draft",
+            builder: {
+              currentStep: stepRef.current,
+              plan: planRef.current,
+              generatedCode: nextCode,
+              checkpoints: nextCheckpoints,
+              messages: nextMessages,
+              stepHistory: nextStepHistory,
+            },
+          });
+        }
         return;
       }
 
       if (response.code) {
-        setCurrentCode(response.code);
-        saveCheckpoint(s, response.code, response.message);
+        nextCode = response.code;
+        nextCheckpoints = [
+          {
+            id: uid(),
+            step: s,
+            code: response.code,
+            timestamp: new Date().toLocaleTimeString(),
+            label: response.message.slice(0, 60),
+          },
+          ...checkpointsRef.current,
+        ];
+        if (mountedRef.current) {
+          setCurrentCode(response.code);
+          setCheckpoints(nextCheckpoints);
+        }
+      }
+
+      if (currentProjectIdRef.current && planRef.current) {
+        dispatch({
+          type: "PROJECT_BUILDER_SAVE",
+          id: currentProjectIdRef.current,
+          name: planRef.current.name,
+          status: nextCode || stepRef.current > 0 ? "Active" : "Draft",
+          builder: {
+            currentStep: stepRef.current,
+            plan: planRef.current,
+            generatedCode: nextCode,
+            checkpoints: nextCheckpoints,
+            messages: nextMessages,
+            stepHistory: nextStepHistory,
+          },
+        });
       }
     } catch (e: unknown) {
+      if (e instanceof Error && e.name === "AbortError") {
+        if (mountedRef.current) {
+          addMsg(s, "ai", "Generation cancelled for this stage.");
+        }
+        return;
+      }
       const msg =
         e instanceof Error
           ? e.message === "NO_API_KEY"
             ? "No API key found. Go to Settings → AI Provider and add your key."
             : e.message
           : "Something went wrong. Please try again.";
-      addMsg(s, "ai", msg);
+      if (mountedRef.current) {
+        addMsg(s, "ai", msg);
+      }
     } finally {
-      setIsLoading(false);
+      if (activeRequestRef.current?.controller === controller) {
+        activeRequestRef.current = null;
+      }
+      if (mountedRef.current) {
+        setIsLoading(false);
+      }
     }
   }
 
   // ── Step navigation ───────────────────────────────────────────────────
 
   function goToStep(nextStep: BuildStep) {
+    if (nextStep !== step && activeRequestRef.current) {
+      activeRequestRef.current.controller.abort();
+      activeRequestRef.current = null;
+      setIsLoading(false);
+    }
+
     setStep(nextStep);
     if (nextStep > maxReached) setMaxReached(nextStep);
 
@@ -766,11 +908,22 @@ export function BuildPage() {
         <div className="builder-preview-col">
           <div className="preview-header">
             <span className="preview-label">Live Preview</span>
-            {currentCode && (
-              <span className="preview-badge">● Running</span>
-            )}
+            <div style={{ display: "flex", alignItems: "center", gap: "0.55rem" }}>
+              {currentCode && (
+                <span className="preview-badge">● Running</span>
+              )}
+              <button
+                type="button"
+                className="text-button"
+                onClick={() => setPreviewReloadNonce((n) => n + 1)}
+                disabled={!currentCode}
+                title="Reload preview"
+              >
+                Reload
+              </button>
+            </div>
           </div>
-          <LivePreview code={currentCode} />
+          <LivePreview code={currentCode} reloadNonce={previewReloadNonce} />
         </div>
       </div>
     </div>
