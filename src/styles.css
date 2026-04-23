@@ -296,71 +296,65 @@ body {
 }
 
 /* ═══════════════════════════════════════════════
-   ARC DIAL DOCK
+   DOCK — fixed left pill
    ═══════════════════════════════════════════════ */
 
-/* Glass pill, pushed left so only the right arc is visible */
-.dial-arc-bg {
+.dock {
   position: fixed;
-  left: -58px;
+  left: 1.1rem;
   top: 50%;
   transform: translateY(-50%);
-  width: 120px;
-  height: 400px;
-  border-radius: 60px;
-  z-index: 48;
-  pointer-events: none;
+  z-index: 50;
+  width: 72px;
+  border-radius: var(--radius-pill);
+  padding: 0.9rem 0.6rem 0.7rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
   animation: dock-reveal 540ms cubic-bezier(0.22, 0.86, 0.3, 1) both;
 }
 
-/* Nav container — fixed, items position relative to this */
-.dial-items-layer {
-  position: fixed;
-  left: 18px;
-  top: 50vh;
-  z-index: 50;
-  width: 0;
-  height: 0;
-  overflow: visible;
+.dock-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  width: 100%;
 }
 
-/* Each dial item is anchored to the layer origin then transformed */
-.dial-item {
-  position: absolute;
-  left: 0;
-  top: 0;
-  width: 44px;
-  height: 44px;
-  border-radius: 50%;
+.dock-item-wrap {
+  position: relative;
+}
+
+.dock-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 58px;
+  border-radius: var(--radius-md);
   border: 1px solid transparent;
   background: none;
-  cursor: pointer;
-  display: grid;
-  place-items: center;
-  font-size: 1.15rem;
   color: var(--ink-soft);
-  transition:
-    transform 420ms cubic-bezier(0.34, 1.56, 0.64, 1),
-    opacity 300ms ease,
-    background 200ms ease,
-    border-color 200ms ease,
-    color 200ms ease;
-  will-change: transform, opacity;
+  font-size: 1.5rem;
+  text-decoration: none;
+  cursor: pointer;
+  position: relative;
+  transition: background 180ms ease, color 180ms ease, border-color 180ms ease;
 }
 
-.dial-item:hover {
+.dock-btn:hover,
+.dock-btn:focus-visible {
   color: var(--ink-main);
   background: var(--surface-hover);
   border-color: var(--glass-stroke);
   outline: none;
 }
 
-.dial-item:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
-}
-
-.dial-item.active {
+.dock-btn.active {
   background: var(--dock-active-bg);
   color: var(--dock-active-color);
   border-color: var(--dock-active-border);
@@ -368,10 +362,10 @@ body {
 }
 
 /* Tooltip */
-.dial-item::after {
+.dock-btn::after {
   content: attr(title);
   position: absolute;
-  left: calc(100% + 12px);
+  left: calc(100% + 10px);
   top: 50%;
   transform: translateY(-50%) translateX(-4px);
   background: var(--bg-2);
@@ -390,43 +384,38 @@ body {
   z-index: 100;
 }
 
-.dial-item:hover::after {
+.dock-btn:hover::after {
   opacity: 1;
   transform: translateY(-50%) translateX(0);
 }
 
 /* Unread dot */
-.dial-badge {
+.dock-badge {
   position: absolute;
-  top: 7px;
-  right: 7px;
-  width: 7px;
-  height: 7px;
+  top: 10px;
+  right: 10px;
+  width: 8px;
+  height: 8px;
   border-radius: 50%;
   background: var(--accent);
   border: 1.5px solid var(--bg);
 }
 
-/* Theme icon below the arc */
-.dial-theme-icon {
-  position: fixed;
-  left: 14px;
-  bottom: 1.5rem;
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
-  display: grid;
-  place-items: center;
+.dock-theme-icon {
+  margin-top: 0.5rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--glass-stroke);
+  width: 100%;
+  text-align: center;
   font-size: 0.9rem;
   color: var(--ink-muted);
-  z-index: 50;
-  pointer-events: none;
-  animation: fade-in 600ms ease 400ms both;
+  line-height: 1;
+  padding-bottom: 0.1rem;
 }
 
 .content-panel {
   min-height: 100vh;
-  padding: 2rem 2rem 2rem 80px;
+  padding: 2rem 2rem 2rem calc(1.1rem + 72px + 1.25rem);
   background: transparent;
   border: none;
   box-shadow: none;
@@ -436,8 +425,8 @@ body {
 .app-footer {
   position: fixed;
   bottom: 1.25rem;
-  left: 0;
-  width: 64px;
+  left: 1.1rem;
+  width: 72px;
   text-align: center;
   font-size: 0.58rem;
   color: var(--ink-muted);
@@ -939,8 +928,11 @@ select:focus {
     padding: 1.5rem 1.25rem 1.5rem 70px;
   }
 
-  .dial-arc-bg {
-    height: 320px;
+  .dock {
+    width: 66px;
+  }
+  .dock-btn {
+    height: 52px;
   }
 
   .advanced-grid,

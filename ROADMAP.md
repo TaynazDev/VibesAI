@@ -81,6 +81,10 @@ Save and reuse prompts.
 
 > Ideas that haven't been added to the UI yet. Add freely.
 
+- **Arc dial dock** — The left nav pill becomes a physical dial: the active item protrudes furthest right, items above/below curve back using cosine-based pullback. Navigating animates all items to new arc positions (spring easing). Feels like rotating a real dial.
+  - Implementation: `useLocation` + index-based offset, `cos(offset * ARC_STEP)` for x-pull, `offset * ITEM_GAP` for y-offset, `transform: translate(xPull, yOffset)` on each button, spring transition `cubic-bezier(0.34, 1.56, 0.64, 1)`. The pill background is pushed `left: -58px` so only its right curved edge is visible.
+  - Was partially implemented and reverted — see commit `f6bc5bd`
+
 - **Diff view** — when Refactor mode returns output, show a side-by-side before/after diff
 - **Streaming responses** — stream GPT output token by token instead of waiting for the full response
 - **Multiple models** — let users pick GPT-4o, GPT-4o-mini, Claude, Gemini from a model picker
