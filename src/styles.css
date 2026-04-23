@@ -654,11 +654,23 @@ input:not(.prompt-input) {
 }
 
 select {
-  background: var(--surface);
+  background: var(--surface-flat);
+  color: var(--ink-main);
   border: 1px solid var(--glass-stroke);
   border-radius: var(--radius-md);
   padding: 0.65rem 0.85rem;
   cursor: pointer;
+  -webkit-appearance: none;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23888' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.75rem center;
+  padding-right: 2.2rem;
+}
+
+select option {
+  background: var(--surface-flat);
+  color: var(--ink-main);
 }
 
 .search-input:focus,
