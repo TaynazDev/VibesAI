@@ -1,39 +1,144 @@
 @import url("https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,400;0,14..32,500;0,14..32,600;0,14..32,700&family=Space+Grotesk:wght@500;600;700&display=swap");
 
+/* ═══════════════════════════════════════════════
+   Shared tokens (geometry, type, status)
+   ═══════════════════════════════════════════════ */
 :root {
-  /* Midnight base */
-  --bg:              #08080e;
-  --bg-2:            #0d0d18;
-  --surface:         rgba(255, 255, 255, 0.038);
-  --surface-hover:   rgba(255, 255, 255, 0.065);
-  --glass-base:      rgba(16, 16, 28, 0.70);
-  --glass-strong:    rgba(20, 20, 35, 0.82);
-  --glass-stroke:    rgba(255, 255, 255, 0.09);
-  --glass-stroke-hi: rgba(255, 255, 255, 0.15);
-  --ink-main:        #f0f2f8;
-  --ink-soft:        #64748b;
-  --ink-muted:       #334155;
-  /* Pink → Blue gradient system */
-  --accent:          #f472b6;
-  --accent-2:        #60a5fa;
-  --accent-mid:      #a78bfa;
-  --accent-glow:     rgba(244, 114, 182, 0.22);
-  --accent-glow-2:   rgba(96, 165, 250, 0.18);
-  --grad:            linear-gradient(135deg, #f472b6 0%, #a78bfa 50%, #60a5fa 100%);
-  --grad-subtle:     linear-gradient(135deg, rgba(244,114,182,0.15) 0%, rgba(96,165,250,0.12) 100%);
-  --success:         #34d399;
-  --warn:            #fbbf24;
-  --danger:          #f87171;
-  --radius-pill:     999px;
-  --radius-xl:       22px;
-  --radius-md:       14px;
-  --radius-sm:       8px;
-  --dock-w:          68px;
-  --dock-left:       1.25rem;
-  --bg-flat:         #08080e;
-  --surface-flat:    #0d0d18;
-  --glass-stroke-strong: rgba(255,255,255,0.15);
-  --shadow-main:     0 24px 48px rgba(0,0,0,0.6);
+  --radius-pill:  999px;
+  --radius-xl:    22px;
+  --radius-md:    14px;
+  --radius-sm:    8px;
+  --dock-w:       68px;
+  --dock-left:    1.25rem;
+  --success:      #34d399;
+  --warn:         #fbbf24;
+  --danger:       #f87171;
+  /* shared gradient used on send btn, run btn */
+  --grad:         linear-gradient(135deg, #f472b6 0%, #a78bfa 50%, #60a5fa 100%);
+}
+
+/* ═══════════════════════════════════════════════
+   DARK theme (default)
+   ═══════════════════════════════════════════════ */
+:root,
+[data-theme="dark"] {
+  --bg:                  #08080e;
+  --bg-2:                #0d0d18;
+  --surface:             rgba(255, 255, 255, 0.038);
+  --surface-hover:       rgba(255, 255, 255, 0.065);
+  --glass-base:          rgba(16, 16, 28, 0.72);
+  --glass-strong:        rgba(20, 20, 35, 0.84);
+  --glass-stroke:        rgba(255, 255, 255, 0.09);
+  --glass-stroke-hi:     rgba(255, 255, 255, 0.15);
+  --glass-stroke-strong: rgba(255, 255, 255, 0.15);
+  --ink-main:            #f0f2f8;
+  --ink-soft:            #64748b;
+  --ink-muted:           #334155;
+  /* Pink accent for dark */
+  --accent:              #f472b6;
+  --accent-glow:         rgba(244, 114, 182, 0.25);
+  --dock-active-bg:      rgba(244, 114, 182, 0.18);
+  --dock-active-color:   #f9a8d4;
+  --dock-active-border:  rgba(244, 114, 182, 0.35);
+  --shadow-main:         0 24px 48px rgba(0,0,0,0.6);
+  --bg-flat:             #08080e;
+  --surface-flat:        #0d0d18;
+  --app-bg-grad:
+    radial-gradient(ellipse 65% 45% at 0% 0%, rgba(244,114,182,0.05) 0%, transparent 60%),
+    radial-gradient(ellipse 55% 40% at 100% 100%, rgba(96,165,250,0.04) 0%, transparent 60%),
+    #08080e;
+}
+
+/* ═══════════════════════════════════════════════
+   LIGHT theme
+   ═══════════════════════════════════════════════ */
+[data-theme="light"] {
+  --bg:                  #f8f9fc;
+  --bg-2:                #eef0f6;
+  --surface:             rgba(0, 0, 0, 0.04);
+  --surface-hover:       rgba(0, 0, 0, 0.07);
+  --glass-base:          rgba(255, 255, 255, 0.72);
+  --glass-strong:        rgba(255, 255, 255, 0.88);
+  --glass-stroke:        rgba(0, 0, 0, 0.07);
+  --glass-stroke-hi:     rgba(0, 0, 0, 0.12);
+  --glass-stroke-strong: rgba(0, 0, 0, 0.12);
+  --ink-main:            #0f172a;
+  --ink-soft:            #64748b;
+  --ink-muted:           #94a3b8;
+  /* Blue accent for light */
+  --accent:              #3b82f6;
+  --accent-glow:         rgba(59, 130, 246, 0.2);
+  --dock-active-bg:      rgba(59, 130, 246, 0.12);
+  --dock-active-color:   #2563eb;
+  --dock-active-border:  rgba(59, 130, 246, 0.28);
+  --shadow-main:         0 12px 32px rgba(0,0,0,0.12);
+  --bg-flat:             #f8f9fc;
+  --surface-flat:        #eef0f6;
+  --app-bg-grad:
+    radial-gradient(ellipse 65% 45% at 0% 0%, rgba(59,130,246,0.05) 0%, transparent 60%),
+    radial-gradient(ellipse 55% 40% at 100% 100%, rgba(139,92,246,0.03) 0%, transparent 60%),
+    #f8f9fc;
+}
+
+/* ═══════════════════════════════════════════════
+   SYSTEM: respect OS preference when theme=system
+   ═══════════════════════════════════════════════ */
+@media (prefers-color-scheme: light) {
+  [data-theme="system"] {
+    --bg:                  #f8f9fc;
+    --bg-2:                #eef0f6;
+    --surface:             rgba(0, 0, 0, 0.04);
+    --surface-hover:       rgba(0, 0, 0, 0.07);
+    --glass-base:          rgba(255, 255, 255, 0.72);
+    --glass-strong:        rgba(255, 255, 255, 0.88);
+    --glass-stroke:        rgba(0, 0, 0, 0.07);
+    --glass-stroke-hi:     rgba(0, 0, 0, 0.12);
+    --glass-stroke-strong: rgba(0, 0, 0, 0.12);
+    --ink-main:            #0f172a;
+    --ink-soft:            #64748b;
+    --ink-muted:           #94a3b8;
+    --accent:              #3b82f6;
+    --accent-glow:         rgba(59, 130, 246, 0.2);
+    --dock-active-bg:      rgba(59, 130, 246, 0.12);
+    --dock-active-color:   #2563eb;
+    --dock-active-border:  rgba(59, 130, 246, 0.28);
+    --shadow-main:         0 12px 32px rgba(0,0,0,0.12);
+    --bg-flat:             #f8f9fc;
+    --surface-flat:        #eef0f6;
+    --app-bg-grad:
+      radial-gradient(ellipse 65% 45% at 0% 0%, rgba(59,130,246,0.05) 0%, transparent 60%),
+      radial-gradient(ellipse 55% 40% at 100% 100%, rgba(139,92,246,0.03) 0%, transparent 60%),
+      #f8f9fc;
+  }
+}
+
+@media (prefers-color-scheme: dark) {
+  [data-theme="system"] {
+    --bg:                  #08080e;
+    --bg-2:                #0d0d18;
+    --surface:             rgba(255, 255, 255, 0.038);
+    --surface-hover:       rgba(255, 255, 255, 0.065);
+    --glass-base:          rgba(16, 16, 28, 0.72);
+    --glass-strong:        rgba(20, 20, 35, 0.84);
+    --glass-stroke:        rgba(255, 255, 255, 0.09);
+    --glass-stroke-hi:     rgba(255, 255, 255, 0.15);
+    --glass-stroke-strong: rgba(255, 255, 255, 0.15);
+    --ink-main:            #f0f2f8;
+    --ink-soft:            #64748b;
+    --ink-muted:           #334155;
+    --accent:              #f472b6;
+    --accent-glow:         rgba(244, 114, 182, 0.25);
+    --dock-active-bg:      rgba(244, 114, 182, 0.18);
+    --dock-active-color:   #f9a8d4;
+    --dock-active-border:  rgba(244, 114, 182, 0.35);
+    --shadow-main:         0 24px 48px rgba(0,0,0,0.6);
+    --bg-flat:             #08080e;
+    --surface-flat:        #0d0d18;
+    --app-bg-grad:
+      radial-gradient(ellipse 65% 45% at 0% 0%, rgba(244,114,182,0.05) 0%, transparent 60%),
+      radial-gradient(ellipse 55% 40% at 100% 100%, rgba(96,165,250,0.04) 0%, transparent 60%),
+      #08080e;
+  }
 }
 
 * {
@@ -57,10 +162,7 @@ body {
 .app-bg {
   min-height: 100vh;
   position: relative;
-  background:
-    radial-gradient(ellipse 65% 45% at 0% 0%, rgba(244,114,182,0.06) 0%, transparent 60%),
-    radial-gradient(ellipse 55% 40% at 100% 100%, rgba(96,165,250,0.05) 0%, transparent 60%),
-    var(--bg);
+  background: var(--app-bg-grad);
 }
 
 .atmosphere {
@@ -84,6 +186,23 @@ body {
     0 2px 6px rgba(0,0,0,0.3),
     inset 0 1px 0 rgba(255,255,255,0.13),
     inset 0 -1px 0 rgba(0,0,0,0.18);
+}
+
+/* Light mode: softer shadow, no dark tint */
+[data-theme="light"] .glass {
+  box-shadow:
+    0 4px 24px rgba(0,0,0,0.08),
+    0 1px 4px rgba(0,0,0,0.06),
+    inset 0 1px 0 rgba(255,255,255,0.9);
+}
+
+@media (prefers-color-scheme: light) {
+  [data-theme="system"] .glass {
+    box-shadow:
+      0 4px 24px rgba(0,0,0,0.08),
+      0 1px 4px rgba(0,0,0,0.06),
+      inset 0 1px 0 rgba(255,255,255,0.9);
+  }
 }
 
 .glass::before {
@@ -139,9 +258,10 @@ body {
   font-weight: 700;
   letter-spacing: 0.06em;
   font-family: "Space Grotesk", sans-serif;
-  background: var(--grad);
-  color: #fff;
-  box-shadow: 0 4px 14px rgba(244,114,182,0.3), 0 4px 14px rgba(96,165,250,0.15);
+  background: var(--dock-active-bg);
+  color: var(--dock-active-color);
+  border: 1px solid var(--dock-active-border);
+  box-shadow: 0 2px 10px var(--accent-glow);
 }
 
 .dock-list {
@@ -178,10 +298,10 @@ body {
 }
 
 .dock-link.active {
-  background: var(--grad);
-  color: #fff;
-  border-color: transparent;
-  box-shadow: 0 4px 18px rgba(244,114,182,0.25), 0 4px 18px rgba(96,165,250,0.15);
+  background: var(--dock-active-bg);
+  color: var(--dock-active-color);
+  border-color: var(--dock-active-border);
+  box-shadow: 0 2px 12px var(--accent-glow);
 }
 
 /* Tooltip on hover */
@@ -245,6 +365,17 @@ body {
   animation: fade-in 600ms ease 400ms both;
 }
 
+.dock-theme-icon {
+  margin-top: 0.6rem;
+  padding-top: 0.6rem;
+  border-top: 1px solid var(--glass-stroke);
+  width: 100%;
+  text-align: center;
+  font-size: 0.95rem;
+  color: var(--ink-muted);
+  line-height: 1;
+}
+
 .page-stack {
   display: flex;
   flex-direction: column;
@@ -281,7 +412,7 @@ body {
   margin: 0 0 0.5rem;
   font-size: clamp(2rem, 5vw, 3.2rem);
   font-weight: 700;
-  background: linear-gradient(135deg, #fce7f3 15%, #e9d5ff 50%, #bfdbfe 85%);
+  background: var(--grad);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
@@ -306,8 +437,8 @@ body {
   justify-content: space-between;
   padding: 0.65rem 1rem;
   border-radius: var(--radius-md);
-  background: rgba(244, 114, 182, 0.08);
-  border: 1px solid rgba(244, 114, 182, 0.22);
+  background: var(--dock-active-bg);
+  border: 1px solid var(--dock-active-border);
   color: var(--ink-soft);
   font-size: 0.86rem;
 }
@@ -397,9 +528,9 @@ body {
 }
 
 .bar-chip.active {
-  background: rgba(244,114,182,0.12);
-  border-color: rgba(244,114,182,0.28);
-  color: #f9a8d4;
+  background: var(--dock-active-bg);
+  border-color: var(--dock-active-border);
+  color: var(--dock-active-color);
 }
 
 /* Round gradient send button */
@@ -491,9 +622,9 @@ body {
 }
 
 .chip.active {
-  background: rgba(244,114,182,0.14);
-  color: #f9a8d4;
-  border-color: rgba(244,114,182,0.3);
+  background: var(--dock-active-bg);
+  color: var(--dock-active-color);
+  border-color: var(--dock-active-border);
   box-shadow: none;
 }
 
@@ -533,8 +664,8 @@ select {
 .search-input:focus,
 input:focus,
 select:focus {
-  border-color: rgba(244,114,182,0.45);
-  box-shadow: 0 0 0 3px rgba(244,114,182,0.12);
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-glow);
   outline: none;
 }
 
@@ -1056,7 +1187,7 @@ select:focus {
 .unread-item {
   border-left: 2px solid var(--accent);
   padding-left: calc(1rem - 2px);
-  background: rgba(244,114,182,0.04);
+  background: var(--dock-active-bg);
 }
 
 .empty-state {

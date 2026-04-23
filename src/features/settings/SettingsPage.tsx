@@ -45,9 +45,9 @@ export function SettingsPage() {
               value={settings.theme}
               onChange={(e) => update({ theme: e.target.value as Settings["theme"] })}
             >
-              <option value="system">System default</option>
-              <option value="light">Light</option>
-              <option value="dark">Dark</option>
+              <option value="system">Device default (syncs with OS)</option>
+              <option value="dark">Dark — pink accents</option>
+              <option value="light">Light — blue accents</option>
             </select>
           </label>
         </div>
