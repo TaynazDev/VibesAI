@@ -47,6 +47,10 @@ All notable changes to VibesAI are documented in this file.
 - Builder preview now includes a manual `Reload` control to re-render the live iframe on demand.
 - AI Chat page now behaves as a conversational chat (message/response thread) rather than single-run output cards.
 - Removed the `Coming soon` section from the AI Chat page.
+- AI Chat layout refined for a minimal aesthetic:
+  - Removed boxed chat-window panel treatment so messages render in open space.
+  - Starter suggestions now sit directly above the input bar.
+  - Input bar styling softened to feel lighter while preserving usability.
 - Splash screen button shadow now supports gyro-based parallax on capable devices.
 - Tab icon and `theme-color` now sync to active theme at app level.
 - Builder suggestions are now shown only for stages 3, 4, and 5.

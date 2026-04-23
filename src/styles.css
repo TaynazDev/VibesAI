@@ -318,15 +318,15 @@ body {
   position: absolute;
   left: 0;
   top: 0;
-  width: 58px;
-  height: 58px;
+  width: 46px;
+  height: 46px;
   border-radius: 50%;
   border: 1.5px solid var(--glass-stroke);
   background: var(--glass-base);
   backdrop-filter: blur(28px) saturate(160%);
   -webkit-backdrop-filter: blur(28px) saturate(160%);
   color: var(--ink-soft);
-  font-size: 1.35rem;
+  font-size: 1.08rem;
   cursor: pointer;
   display: grid;
   place-items: center;
@@ -653,6 +653,55 @@ body {
   background: rgba(255,255,255,0.07);
   border-color: var(--glass-stroke-hi);
   color: var(--ink-main);
+}
+
+.ai-chat-shell {
+  max-width: 760px;
+  margin: 0 auto;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  animation: fade-in 360ms ease both;
+}
+
+.ai-chat-thread {
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 0.2rem 0;
+  scrollbar-width: thin;
+  scrollbar-color: var(--glass-stroke) transparent;
+}
+
+.ai-chat-msg .ai-chat-msg-bubble {
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  max-width: min(92%, 62ch);
+  padding: 0.2rem 0;
+  line-height: 1.65;
+}
+
+.ai-chat-msg.chat-msg--user .ai-chat-msg-bubble {
+  color: var(--dock-active-color);
+}
+
+.ai-chat-msg.chat-msg--ai .ai-chat-msg-bubble {
+  color: var(--ink-main);
+}
+
+.ai-chat-suggestions {
+  justify-content: flex-start;
+  padding: 0.2rem 0 0.1rem;
+}
+
+.ai-chat-input-area {
+  background: var(--surface);
+  border-color: var(--glass-stroke-hi);
+  backdrop-filter: blur(12px) saturate(115%);
+  -webkit-backdrop-filter: blur(12px) saturate(115%);
 }
 
 .mode-row {
@@ -1075,9 +1124,9 @@ select:focus {
   }
 
   .dial-btn {
-    width: 50px;
-    height: 50px;
-    font-size: 1.15rem;
+    width: 40px;
+    height: 40px;
+    font-size: 0.92rem;
   }
 
   .advanced-grid,
@@ -1087,6 +1136,14 @@ select:focus {
 
   .inline-controls {
     flex-direction: column;
+  }
+
+  .ai-chat-shell {
+    max-width: 100%;
+  }
+
+  .ai-chat-msg .ai-chat-msg-bubble {
+    max-width: 96%;
   }
 }
 

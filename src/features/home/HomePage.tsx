@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { NavLink } from "react-router-dom";
-import { GlassPanel } from "../../components/GlassPanel";
 import { Spinner } from "../../components/Spinner";
 import { runAI, type AIOptions } from "../../services/aiService";
 import { useAppDispatch, useSettings } from "../../store/AppContext";
@@ -150,37 +149,21 @@ export function HomePage() {
         </div>
       )}
 
-      <GlassPanel>
-        <div className="chat-messages" style={{ maxHeight: "58vh", minHeight: "48vh" }}>
+      <section className="ai-chat-shell" aria-label="AI Chat conversation">
+        <div className="ai-chat-thread" style={{ maxHeight: "58vh", minHeight: "48vh" }}>
           {messages.length === 0 && !isRunning && (
             <div className="chat-empty">Start a conversation with AI.</div>
           )}
 
-          {messages.length === 0 && hasApiKey && (
-            <div className="suggestion-row" style={{ marginBottom: "0.75rem" }}>
-              {STARTERS.map((starter) => (
-                <button
-                  key={starter}
-                  type="button"
-                  className="suggestion-chip"
-                  onClick={() => sendMessage(starter)}
-                  disabled={isRunning}
-                >
-                  {starter}
-                </button>
-              ))}
-            </div>
-          )}
-
           {messages.map((msg) => (
-            <div key={msg.id} className={`chat-msg chat-msg--${msg.role}`}>
-              <div className="chat-msg-bubble">{msg.content}</div>
+            <div key={msg.id} className={`chat-msg ai-chat-msg chat-msg--${msg.role}`}>
+              <div className="chat-msg-bubble ai-chat-msg-bubble">{msg.content}</div>
             </div>
           ))}
 
           {isRunning && (
-            <div className="chat-msg chat-msg--ai">
-              <div className="chat-msg-bubble chat-loading">
+            <div className="chat-msg ai-chat-msg chat-msg--ai">
+              <div className="chat-msg-bubble ai-chat-msg-bubble chat-loading">
                 <Spinner /> <span>Thinking…</span>
               </div>
             </div>
@@ -188,6 +171,22 @@ export function HomePage() {
 
           <div ref={endRef} />
         </div>
+
+        {hasApiKey && (
+          <div className="suggestion-row ai-chat-suggestions">
+            {STARTERS.map((starter) => (
+              <button
+                key={starter}
+                type="button"
+                className="suggestion-chip"
+                onClick={() => sendMessage(starter)}
+                disabled={isRunning}
+              >
+                {starter}
+              </button>
+            ))}
+          </div>
+        )}
 
         {error === "NO_API_KEY" && (
           <p className="error-text" style={{ marginTop: "0.75rem" }}>
@@ -198,7 +197,7 @@ export function HomePage() {
           <p className="error-text" style={{ marginTop: "0.75rem" }}>⚠ {error}</p>
         )}
 
-        <div className="chat-input-area" style={{ marginTop: "0.75rem" }}>
+        <div className="chat-input-area ai-chat-input-area" style={{ marginTop: "0.75rem" }}>
           <textarea
             ref={inputRef}
             className="chat-input"
@@ -228,7 +227,7 @@ export function HomePage() {
             </button>
           </div>
         </div>
-      </GlassPanel>
+      </section>
     </div>
   );
 }
