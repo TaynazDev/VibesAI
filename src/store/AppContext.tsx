@@ -11,6 +11,36 @@ import type { AppNotification, Project, ProjectBuilderState, ProjectMessage } fr
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
+export type UsageRecord = {
+  id: string;
+  timestamp: number;
+  model: string;
+  mode: "text" | "image";
+  inputTokens: number;
+  outputTokens: number;
+  cost: number;
+  projectId?: string;
+};
+
+export type Snapshot = {
+  id: string;
+  projectId: string;
+  timestamp: number;
+  label: string;
+  builder: ProjectBuilderState;
+};
+
+export type CriticScore = {
+  id: string;
+  projectId: string;
+  timestamp: number;
+  uxScore: number;
+  a11yScore: number;
+  perfScore: number;
+  overallScore: number;
+  issues: { category: string; severity: "critical" | "warning" | "info"; message: string }[];
+};
+
 export type Settings = {
   workspaceName: string;
   outputStyle: "clean" | "expressive" | "technical";
@@ -51,6 +81,9 @@ type AppState = {
   promptLibrary: PromptTemplate[];
   settings: Settings;
   auth: AuthState;
+  usage: UsageRecord[];
+  snapshots: Snapshot[];
+  criticScores: CriticScore[];
 };
 
 type Action =
@@ -70,7 +103,12 @@ type Action =
   | { type: "PROMPT_SAVE"; template: Omit<PromptTemplate, "id" | "updatedAt"> }
   | { type: "PROMPT_DELETE"; id: string }
   | { type: "SETTINGS_UPDATE"; patch: Partial<Settings> }
-  | { type: "AUTH_UPDATE"; patch: Partial<AuthState> };
+  | { type: "AUTH_UPDATE"; patch: Partial<AuthState> }
+  | { type: "USAGE_ADD"; usage: Omit<UsageRecord, "id"> }
+  | { type: "SNAPSHOT_CREATE"; projectId: string; label: string; builder: ProjectBuilderState }
+  | { type: "SNAPSHOT_DELETE"; id: string }
+  | { type: "SNAPSHOT_RESTORE"; projectId: string; snapshotId: string }
+  | { type: "CRITIC_SCORE_ADD"; projectId: string; score: Omit<CriticScore, "id"> };
 
 // ── Initial state ──────────────────────────────────────────────────────────
 
@@ -114,6 +152,9 @@ function buildInitialState(): AppState {
     promptLibrary: p.promptLibrary ?? [],
     settings: { ...defaultSettings, ...(p.settings ?? {}) },
     auth: { ...defaultAuth, ...(p.auth ?? {}) },
+    usage: p.usage ?? [],
+    snapshots: p.snapshots ?? [],
+    criticScores: p.criticScores ?? [],
   };
 }
 
@@ -271,6 +312,50 @@ function reducer(state: AppState, action: Action): AppState {
       return { ...state, settings: { ...state.settings, ...action.patch } };
     case "AUTH_UPDATE":
       return { ...state, auth: { ...state.auth, ...action.patch } };
+    case "USAGE_ADD":
+      return {
+        ...state,
+        usage: [{ ...action.usage, id: uid() }, ...state.usage],
+      };
+    case "SNAPSHOT_CREATE":
+      return {
+        ...state,
+        snapshots: [
+          {
+            id: uid(),
+            projectId: action.projectId,
+            timestamp: Date.now(),
+            label: action.label,
+            builder: action.builder,
+          },
+          ...state.snapshots,
+        ],
+      };
+    case "SNAPSHOT_DELETE":
+      return {
+        ...state,
+        snapshots: state.snapshots.filter((s) => s.id !== action.id),
+      };
+    case "SNAPSHOT_RESTORE": {
+      const snapshot = state.snapshots.find((s) => s.id === action.snapshotId);
+      if (!snapshot) return state;
+      return {
+        ...state,
+        projects: state.projects.map((p) =>
+          p.id === action.projectId
+            ? { ...p, builder: snapshot.builder, updatedAt: "just now" }
+            : p
+        ),
+      };
+    }
+    case "CRITIC_SCORE_ADD":
+      return {
+        ...state,
+        criticScores: [
+          { ...action.score, id: uid() },
+          ...state.criticScores,
+        ],
+      };
     default:
       return state;
   }
@@ -332,4 +417,16 @@ export function useAuth() {
 
 export function usePromptLibrary() {
   return useAppState().promptLibrary;
+}
+
+export function useUsage() {
+  return useAppState().usage;
+}
+
+export function useSnapshots() {
+  return useAppState().snapshots;
+}
+
+export function useCriticScores() {
+  return useAppState().criticScores;
 }

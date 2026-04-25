@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { NavLink, useLocation } from "react-router-dom";
 import { Spinner } from "../../components/Spinner";
+import { VoiceFloatingOverlay } from "../../components/VoiceFloatingOverlay";
 import { runAI, type AIOptions } from "../../services/aiService";
 import { useAppDispatch, useSettings } from "../../store/AppContext";
+import { useAudioVisualizer } from "../../hooks/useAudioVisualizer";
 import { useSpeechToText } from "../../hooks/useSpeechToText";
 
 type ChatMessage = {
@@ -86,8 +88,35 @@ export function HomePage() {
   const [history, setHistory] = useState<ChatSession[]>([]);
   const [activeHistoryId, setActiveHistoryId] = useState<string>("");
   const [input, setInput] = useState("");
-  const { isListening, supported: sttSupported, toggle: toggleMic } = useSpeechToText((text) => {
-    setInput((prev) => (prev ? `${prev} ${text}` : text));
+  const [voiceExpanded, setVoiceExpanded] = useState(false);
+  const voiceBaseInputRef = useRef("");
+  const { isListening, isSpeaking, supported: sttSupported, toggle: toggleMic } = useSpeechToText({
+    onListeningChange: (listening) => {
+      if (listening) {
+        voiceBaseInputRef.current = input.trim();
+      }
+    },
+    onInterimTranscript: (text) => {
+      const base = voiceBaseInputRef.current;
+      if (!text) {
+        setInput(base);
+        return;
+      }
+      setInput(base ? `${base} ${text}` : text);
+    },
+    onFinalTranscript: (text) => {
+      const base = voiceBaseInputRef.current;
+      const next = base ? `${base} ${text}` : text;
+      voiceBaseInputRef.current = next.trim();
+      setInput(next.trim());
+    },
+  });
+  const { audioData, start: startAudioViz, stop: stopAudioViz } = useAudioVisualizer({
+    onSilenceTimeout: () => {
+      // Auto-close the pill after prolonged silence
+      console.log("Prolonged silence detected, closing voice input");
+      toggleMic(); // Close the voice input
+    },
   });
   const [isRunning, setIsRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -152,6 +181,29 @@ export function HomePage() {
   }, [messages]);
 
   useEffect(() => {
+    if (!isListening) {
+      voiceBaseInputRef.current = input.trim();
+    }
+  }, [input, isListening]);
+
+  useEffect(() => {
+    if (isListening || isSpeaking) {
+      setVoiceExpanded(true);
+      return;
+    }
+    const t = window.setTimeout(() => setVoiceExpanded(false), 140);
+    return () => window.clearTimeout(t);
+  }, [isListening, isSpeaking]);
+
+  useEffect(() => {
+    if (isListening) {
+      startAudioViz();
+    } else {
+      stopAudioViz();
+    }
+  }, [isListening, startAudioViz, stopAudioViz]);
+
+  useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
   }, [messages, isRunning]);
 
@@ -194,6 +246,30 @@ export function HomePage() {
     setMessages(selected?.messages ?? []);
     setInput("");
     setError(null);
+  }
+
+  const voiceDisabled = isRunning;
+
+  function openVoicePill() {
+    if (voiceDisabled) {
+      return;
+    }
+    setVoiceExpanded(true);
+    if (!isListening) {
+      toggleMic();
+    }
+  }
+
+  function onVoicePillClick() {
+    if (voiceDisabled) {
+      return;
+    }
+    if (isListening) {
+      toggleMic();
+      setVoiceExpanded(false);
+      return;
+    }
+    toggleMic();
   }
 
   async function sendMessage(overrideText?: string) {
@@ -370,7 +446,7 @@ export function HomePage() {
             placeholder={placeholder}
             value={input}
             rows={2}
-            disabled={isRunning || !hasApiKey}
+            disabled={isRunning}
             onChange={(e) => {
               setInput(e.target.value);
               const el = e.target;
@@ -385,15 +461,18 @@ export function HomePage() {
           />
           <div className="chat-input-btns">
             {sttSupported && (
-              <button
-                type="button"
-                className={`icon-btn mic-btn${isListening ? " mic-btn--active" : ""}`}
-                onClick={toggleMic}
-                title={isListening ? "Stop listening" : "Speak your prompt"}
-                aria-label={isListening ? "Stop listening" : "Voice input"}
-              >
-                {isListening ? "◼" : "🎙"}
-              </button>
+              <div className={`voice-control${voiceExpanded ? " voice-control--expanded" : ""}`}>
+                <button
+                  type="button"
+                  className="voice-mic-icon"
+                  onClick={openVoicePill}
+                  disabled={voiceDisabled}
+                  aria-label="Open voice input"
+                  title="Voice input"
+                >
+                  🎙
+                </button>
+              </div>
             )}
             <button
               type="button"
@@ -413,6 +492,14 @@ export function HomePage() {
           </div>
         </div>
       </section>
+      
+      <VoiceFloatingOverlay
+        isListening={isListening}
+        isSpeaking={isSpeaking}
+        onPillClick={onVoicePillClick}
+        disabled={voiceDisabled}
+        frequencies={audioData.frequencies}
+      />
     </div>
   );
 }

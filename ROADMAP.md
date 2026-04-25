@@ -78,11 +78,10 @@ Multi-user support.
 
 - **Usage page** with charts and cost tracking
 - **AI Critic Pass** — second-pass scoring for UX, accessibility, and performance with one-click fixes.
-- **Component Locking** — lock sections so AI can't change protected blocks.
 - **Time Travel Editor** — visual timeline with snapshot rollback.
 - **Release Readiness Score** — final score + checklist for UX/a11y/responsive/perf.
 - **VibesAI Visual Identity Pass** — refine this app's own look to feel more premium and distinct.
-  - Improve left-dial/nav readability and hierarchy while keeping the signature look.
+  - Improve left-side/nav readability and hierarchy while keeping the signature look keep the most relevant in the middle and as you go down or up the list the items get less relevant. This way it guides the eye to the most important items first.
   - Tighten spacing rhythm and panel balance across Builder, Projects, Settings, and Account.
   - Add cohesive motion language (entry transitions, state changes, and feedback timing).
 - **Aesthetic Presets for VibesAI UI** — switchable in-app skins for this product itself (not generated apps), e.g. Glass Neon, Editorial Soft, Minimal Mono.
@@ -102,6 +101,7 @@ Multi-user support.
 
 ### 🟠 Next
 
+- **Component Locking** — lock sections so AI can't change protected blocks.
 - **Screenshot-to-UI Rebuild** — upload screenshot and rebuild editable interface.
 - **Business Logic Wizard** — guided setup for rules, permissions, workflows.
 - **Prompt-to-Database Schema** — derive entities and relations from prompt.

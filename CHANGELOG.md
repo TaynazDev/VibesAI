@@ -2,6 +2,46 @@
 
 All notable changes to VibesAI are documented in this file.
 
+## 2026-04-25
+
+### Added
+- **Usage Analytics Dashboard** (`/analytics` route):
+  - Interactive charts (cost timeline, model usage, request distribution)
+  - Time range filtering (Today, Week, Month, All-time)
+  - Key metrics display (total requests, tokens, cost, avg cost per request)
+  - Detailed model breakdown table
+  - CSV and JSON export functionality
+- **AI Critic Pass Modal**:
+  - One-click UX, Accessibility, and Performance scoring
+  - Issue detection with severity badges (critical/warning/info)
+  - Color-coded score display and improvement suggestions
+  - Accessible from Builder preview toolbar via 🤖 Critic button
+- **Time Travel Snapshot System**:
+  - Auto-snapshot creation on every code generation
+  - Side panel showing all project snapshots with timestamps
+  - One-click restore to any previous version
+  - Snapshot deletion for cleanup
+  - Accessible from Builder via ⏱ Time Travel button
+- **Release Readiness Modal**:
+  - Overall readiness score visualization (0-100%)
+  - Status indicators (Ready/Review Needed/Not Ready)
+  - Category-based quality checks (UX/A11y/Performance/Critical Issues)
+  - Issue severity display and deployment readiness
+  - Accessible from Builder via 📊 Release button
+- Added **recharts** dependency for interactive analytics visualizations
+- Extended AppContext with new types: `UsageRecord`, `Snapshot`, `CriticScore`
+- New state management actions: `USAGE_ADD`, `SNAPSHOT_*`, `CRITIC_SCORE_ADD`
+- New hooks: `useUsage()`, `useSnapshots()`, `useCriticScores()`
+
+### Changed
+- README now includes comprehensive getting-started tutorial with step-by-step guides
+- Voice input animation improvements:
+  - Bars now animate smoothly from 0.15-1.5 scale range
+  - Center-outward mirroring effect for visual hierarchy
+  - Silent state now shows tiny dots (0.15 scale) instead of dashes
+  - Microphone only activates during active listening
+  - Splash screen shows on browser reopen (sessionStorage-based)
+
 ## 2026-04-23
 
 ### Added

@@ -4,6 +4,7 @@ import { AppShell } from "./app/AppShell";
 import { OnboardingPage } from "./components/OnboardingPage";
 import { SplashScreen } from "./components/SplashScreen";
 import { AccountPage } from "./features/account/AccountPage";
+import { AnalyticsPage } from "./features/analytics/AnalyticsPage";
 import { BuildPage } from "./features/builder/BuildPage";
 import { ComingSoonPage } from "./features/coming-soon/ComingSoonPage";
 import { ExpressEditPage } from "./features/express/ExpressEditPage";
@@ -18,9 +19,17 @@ import { AppProvider, useSettings } from "./store/AppContext";
 function AppInner() {
   const baseUrl = import.meta.env.BASE_URL;
   const { theme } = useSettings();
-  const [splashDone, setSplashDone] = useState(
-    () => sessionStorage.getItem("va_splash_done") === "1"
-  );
+  // sessionStorage persists during a tab/browser session
+  // When tab/browser closes completely, sessionStorage is cleared
+  // So splash shows on: browser/tab reopen, AND first load in new session
+  const [splashDone, setSplashDone] = useState(false);
+
+  useEffect(() => {
+    // Check if splash was already shown in this session
+    const wasShown = sessionStorage.getItem("va_splash_done") === "1";
+    setSplashDone(wasShown);
+  }, []);
+
   const [onboardingDone, setOnboardingDone] = useState(
     () => localStorage.getItem("va_onboarding_done") === "1"
   );
@@ -87,6 +96,7 @@ function AppInner() {
         <Route path="/" element={<BuildPage />} />
         <Route path="/builder/:id" element={<BuildPage />} />
         <Route path="/edit/:id" element={<ExpressEditPage />} />
+        <Route path="/analytics" element={<AnalyticsPage />} />
         <Route path="/coming-soon" element={<ComingSoonPage />} />
         <Route path="/projects" element={<ProjectsPage />} />
         <Route path="/projects/:id" element={<ProjectDetailPage />} />

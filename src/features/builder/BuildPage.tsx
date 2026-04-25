@@ -2,13 +2,18 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { NavLink, useLocation, useParams } from "react-router-dom";
 import { GlassPanel } from "../../components/GlassPanel";
 import { Spinner } from "../../components/Spinner";
+import { VoiceFloatingOverlay } from "../../components/VoiceFloatingOverlay";
+import { AICriticPassModal } from "../../components/AICriticPassModal";
+import { ReleaseReadinessModal } from "../../components/ReleaseReadinessModal";
+import { TimeTravelPanel } from "../../components/TimeTravelPanel";
 import { generatePlan, runBuilderStepStream } from "../../services/builderService";
 import { useAppDispatch, useProjects, useSettings } from "../../store/AppContext";
+import { useAudioVisualizer } from "../../hooks/useAudioVisualizer";
+import { useSpeechToText } from "../../hooks/useSpeechToText";
 import type { AppPlan, BuildMessage, BuildStep, Checkpoint } from "./buildTypes";
 import { STEP_DESCRIPTIONS, STEP_LABELS } from "./buildTypes";
 import { DiffView } from "./DiffView";
 import { LivePreview } from "./LivePreview";
-import { useSpeechToText } from "../../hooks/useSpeechToText";
 
 const uid = () => Math.random().toString(36).slice(2, 10);
 const BUILDER_SESSION_KEY = "va_builder_project_id";
@@ -152,6 +157,10 @@ export function BuildPage() {
   const [showDiff, setShowDiff] = useState(false);
   const [prevCode, setPrevCode] = useState("");
   const [streamingMsg, setStreamingMsg] = useState<string | null>(null);
+  const [voiceExpanded, setVoiceExpanded] = useState(false);
+  const [showCriticPass, setShowCriticPass] = useState(false);
+  const [showTimeTravelPanel, setShowTimeTravelPanel] = useState(false);
+  const [showReleaseScore, setShowReleaseScore] = useState(false);
   const streamingMsgRef = useRef<string | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -168,12 +177,56 @@ export function BuildPage() {
   const messagesRef = useRef(messages);
   const stepHistoryRef = useRef(stepHistory);
   const currentProjectIdRef = useRef<string | null>(currentProjectId);
+  const voiceBaseInputRef = useRef("");
+  const appDescRef = useRef(appDesc);
+  const chatInputValueRef = useRef(chatInput);
   const modeSteps = builderMode === "express" ? ([0, 1] as BuildStep[]) : ([0, 1, 2, 3, 4] as BuildStep[]);
   const modeStepLabels = builderMode === "express" ? EXPRESS_STEP_LABELS : STEP_LABELS;
   const modeStepDescriptions = builderMode === "express" ? EXPRESS_STEP_DESCRIPTIONS : STEP_DESCRIPTIONS;
 
-  const { isListening, supported: sttSupported, toggle: toggleMic } = useSpeechToText((text) => {
-    setChatInput((prev) => (prev ? `${prev} ${text}` : text));
+  const { isListening, isSpeaking, supported: sttSupported, toggle: toggleMic } = useSpeechToText({
+    onListeningChange: (listening) => {
+      if (listening) {
+        voiceBaseInputRef.current = stepRef.current === 0
+          ? appDescRef.current.trim()
+          : chatInputValueRef.current.trim();
+      }
+    },
+    onInterimTranscript: (text) => {
+      const base = voiceBaseInputRef.current;
+      if (!text) {
+        if (stepRef.current === 0) {
+          setAppDesc(base);
+        } else {
+          setChatInput(base);
+        }
+        return;
+      }
+      const next = base ? `${base} ${text}` : text;
+      if (stepRef.current === 0) {
+        setAppDesc(next);
+      } else {
+        setChatInput(next);
+      }
+    },
+    onFinalTranscript: (text) => {
+      const base = voiceBaseInputRef.current;
+      const next = base ? `${base} ${text}` : text;
+      voiceBaseInputRef.current = next.trim();
+      if (stepRef.current === 0) {
+        setAppDesc(next.trim());
+      } else {
+        setChatInput(next.trim());
+      }
+    },
+  });
+
+  const { audioData, start: startAudioViz, stop: stopAudioViz } = useAudioVisualizer({
+    onSilenceTimeout: () => {
+      // Auto-close the pill after prolonged silence
+      console.log("Prolonged silence detected, closing voice input");
+      toggleMic(); // Close the voice input
+    },
   });
 
   useEffect(() => {
@@ -181,6 +234,15 @@ export function BuildPage() {
       mountedRef.current = false;
     };
   }, []);
+
+  // ── Start/stop audio visualizer with speech recognition ─────────────
+  useEffect(() => {
+    if (isListening) {
+      startAudioViz();
+    } else {
+      stopAudioViz();
+    }
+  }, [isListening, startAudioViz, stopAudioViz]);
 
   // ── Fresh-start when Home is re-clicked while already on "/" ─────────
   const freshToken = (location.state as { fresh?: number } | null)?.fresh;
@@ -220,6 +282,7 @@ export function BuildPage() {
     setPreviewReloadNonce(0);
     setShowDiff(false);
     setPrevCode("");
+    setVoiceExpanded(false);
     setStreamingMsg(null);
     streamingMsgRef.current = null;
     // Clear stale location state so navigating back doesn't re-trigger
@@ -248,6 +311,29 @@ export function BuildPage() {
   useEffect(() => {
     currentProjectIdRef.current = currentProjectId;
   }, [currentProjectId]);
+
+  useEffect(() => {
+    appDescRef.current = appDesc;
+  }, [appDesc]);
+
+  useEffect(() => {
+    chatInputValueRef.current = chatInput;
+  }, [chatInput]);
+
+  useEffect(() => {
+    if (!isListening) {
+      voiceBaseInputRef.current = step === 0 ? appDesc.trim() : chatInput.trim();
+    }
+  }, [appDesc, chatInput, isListening, step]);
+
+  useEffect(() => {
+    if (isListening || isSpeaking) {
+      setVoiceExpanded(true);
+      return;
+    }
+    const t = window.setTimeout(() => setVoiceExpanded(false), 140);
+    return () => window.clearTimeout(t);
+  }, [isListening, isSpeaking]);
 
   useEffect(() => {
     if (routeProjectId && routeProjectId !== currentProjectId) {
@@ -506,6 +592,23 @@ export function BuildPage() {
             stepHistory: nextStepHistory,
           },
         });
+
+        // Create snapshot for time travel
+        if (nextCode) {
+          dispatch({
+            type: "SNAPSHOT_CREATE",
+            projectId: currentProjectIdRef.current,
+            label: `Step ${stepRef.current} - ${new Date().toLocaleTimeString()}`,
+            builder: {
+              currentStep: stepRef.current,
+              plan: planRef.current,
+              generatedCode: nextCode,
+              checkpoints: nextCheckpoints,
+              messages: nextMessages,
+              stepHistory: nextStepHistory,
+            },
+          });
+        }
       }
     } catch (e: unknown) {
       streamingMsgRef.current = null;
@@ -701,6 +804,32 @@ export function BuildPage() {
     void doChat(`Apply this exact aesthetic direction to the app: ${aesthetic}. Keep all functionality intact.`, 3);
   }
 
+  const voiceDisabled = step === 0
+    ? isPlanLoading
+    : isLoading || (builderMode === "standard" && step === 3 && !selectedAesthetic);
+
+  function openVoicePill() {
+    if (voiceDisabled) {
+      return;
+    }
+    setVoiceExpanded(true);
+    if (!isListening) {
+      toggleMic();
+    }
+  }
+
+  function onVoicePillClick() {
+    if (voiceDisabled) {
+      return;
+    }
+    if (isListening) {
+      toggleMic();
+      setVoiceExpanded(false);
+      return;
+    }
+    toggleMic();
+  }
+
   // ── Render: Step 0 ────────────────────────────────────────────────────
 
   if (step === 0) {
@@ -752,7 +881,7 @@ export function BuildPage() {
             placeholder='Describe your app idea… e.g. "A habit tracker with streaks, daily reminders, and a beautiful dark dashboard"'
             value={appDesc}
             rows={4}
-            disabled={!hasApiKey || isPlanLoading}
+            disabled={isPlanLoading}
             onChange={(e) => setAppDesc(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
@@ -764,7 +893,21 @@ export function BuildPage() {
               }
             }}
           />
-          <div style={{ display: "flex", justifyContent: "flex-end", marginTop: "0.75rem" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "0.75rem" }}>
+            {sttSupported ? (
+              <div className={`voice-control${voiceExpanded ? " voice-control--expanded" : ""}`}>
+                <button
+                  type="button"
+                  className="voice-mic-icon"
+                  onClick={openVoicePill}
+                  disabled={voiceDisabled}
+                  aria-label="Open voice input"
+                  title="Voice input"
+                >
+                  🎙
+                </button>
+              </div>
+            ) : <span />}
             <button
               className="run-button"
               onClick={builderMode === "express" ? handleExpressBuild : handleGeneratePlan}
@@ -916,6 +1059,14 @@ export function BuildPage() {
             </div>
           </GlassPanel>
         )}
+        
+        <VoiceFloatingOverlay
+          isListening={isListening}
+          isSpeaking={isSpeaking}
+          onPillClick={onVoicePillClick}
+          disabled={voiceDisabled}
+          frequencies={audioData.frequencies}
+        />
       </div>
     );
   }
@@ -1073,7 +1224,7 @@ export function BuildPage() {
               }
               value={chatInput}
               rows={2}
-              disabled={isLoading || !hasApiKey || (builderMode === "standard" && step === 3 && !selectedAesthetic)}
+              disabled={isLoading || (builderMode === "standard" && step === 3 && !selectedAesthetic)}
               onChange={(e) => {
                 setChatInput(e.target.value);
                 const el = e.target;
@@ -1086,15 +1237,18 @@ export function BuildPage() {
             />
             <div className="chat-input-btns">
               {sttSupported && (
-                <button
-                  type="button"
-                  className={`icon-btn mic-btn${isListening ? " mic-btn--active" : ""}`}
-                  onClick={toggleMic}
-                  title={isListening ? "Stop listening" : "Speak your prompt"}
-                  aria-label={isListening ? "Stop listening" : "Voice input"}
-                >
-                  {isListening ? "◼" : "🎙"}
-                </button>
+                <div className={`voice-control${voiceExpanded ? " voice-control--expanded" : ""}`}>
+                  <button
+                    type="button"
+                    className="voice-mic-icon"
+                    onClick={openVoicePill}
+                    disabled={voiceDisabled}
+                    aria-label="Open voice input"
+                    title="Voice input"
+                  >
+                    🎙
+                  </button>
+                </div>
               )}
               <button
                 className="run-button"
@@ -1142,6 +1296,30 @@ export function BuildPage() {
               {currentCode && !showDiff && (
                 <span className="preview-badge">● Running</span>
               )}
+              <button
+                type="button"
+                className="text-button"
+                onClick={() => setShowCriticPass(true)}
+                title="Run AI Critic Pass"
+              >
+                🤖 Critic
+              </button>
+              <button
+                type="button"
+                className="text-button"
+                onClick={() => setShowTimeTravelPanel(!showTimeTravelPanel)}
+                title="Time Travel snapshots"
+              >
+                ⏱️ Snapshots
+              </button>
+              <button
+                type="button"
+                className="text-button"
+                onClick={() => setShowReleaseScore(true)}
+                title="Release Readiness Score"
+              >
+                📋 Release
+              </button>
               {prevCode && currentCode && (
                 <button
                   type="button"
@@ -1170,6 +1348,35 @@ export function BuildPage() {
             : <LivePreview code={currentCode} reloadNonce={previewReloadNonce} />}
         </div>
       </div>
+      
+      <VoiceFloatingOverlay
+        isListening={isListening}
+        isSpeaking={isSpeaking}
+        onPillClick={onVoicePillClick}
+        disabled={voiceDisabled}
+        frequencies={audioData.frequencies}
+      />
+
+      <TimeTravelPanel
+        projectId={currentProjectId || ""}
+        isOpen={showTimeTravelPanel}
+        onClose={() => setShowTimeTravelPanel(false)}
+      />
+
+      {showCriticPass && (
+        <AICriticPassModal
+          projectId={currentProjectId || ""}
+          builder={builderProject?.builder}
+          onClose={() => setShowCriticPass(false)}
+        />
+      )}
+
+      {showReleaseScore && (
+        <ReleaseReadinessModal
+          projectId={currentProjectId || ""}
+          onClose={() => setShowReleaseScore(false)}
+        />
+      )}
     </div>
   );
 }
