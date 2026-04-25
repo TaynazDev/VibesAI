@@ -1,12 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { NavLink, useParams } from "react-router-dom";
+import { NavLink, useLocation, useParams } from "react-router-dom";
 import { GlassPanel } from "../../components/GlassPanel";
 import { Spinner } from "../../components/Spinner";
-import { generatePlan, runBuilderStep } from "../../services/builderService";
+import { generatePlan, runBuilderStepStream } from "../../services/builderService";
 import { useAppDispatch, useProjects, useSettings } from "../../store/AppContext";
 import type { AppPlan, BuildMessage, BuildStep, Checkpoint } from "./buildTypes";
 import { STEP_DESCRIPTIONS, STEP_LABELS } from "./buildTypes";
+import { DiffView } from "./DiffView";
 import { LivePreview } from "./LivePreview";
+import { useSpeechToText } from "../../hooks/useSpeechToText";
 
 const uid = () => Math.random().toString(36).slice(2, 10);
 const BUILDER_SESSION_KEY = "va_builder_project_id";
@@ -18,20 +20,34 @@ const STEP_INTROS: Record<number, string> = {
   4: "Analyse the current app carefully and ask me 3 smart, proactive questions about what to finalize or improve.",
 };
 
+const EXPRESS_STEP_LABELS: Record<number, string> = {
+  0: "Plan",
+  1: "Finishing Touches",
+};
+
+const EXPRESS_STEP_DESCRIPTIONS: Record<number, string> = {
+  0: "Describe your app and let AI plan it quickly",
+  1: "AI builds the app fast, then you refine and edit",
+};
+
 // ── Sub-components ────────────────────────────────────────────────────────
 
 function StepBar({
   step,
   maxReached,
+  steps,
+  labels,
   onStepClick,
 }: {
   step: BuildStep;
   maxReached: BuildStep;
+  steps: BuildStep[];
+  labels: Record<number, string>;
   onStepClick: (s: BuildStep) => void;
 }) {
   return (
     <div className="step-bar" role="tablist" aria-label="Builder steps">
-      {([0, 1, 2, 3, 4] as BuildStep[]).map((s, i) => {
+      {steps.map((s, i) => {
         const isActive = s === step;
         const isCompleted = s < step;
         const isDisabled = s > maxReached;
@@ -43,10 +59,10 @@ function StepBar({
             className={`step-dot${isActive ? " active" : ""}${isCompleted ? " completed" : ""}${isDisabled ? " disabled" : ""}`}
             onClick={() => !isDisabled && onStepClick(s)}
             disabled={isDisabled}
-            title={STEP_LABELS[s]}
+            title={labels[s]}
           >
             <span className="step-dot-num">{isCompleted ? "✓" : i + 1}</span>
-            <span className="step-dot-name">{STEP_LABELS[s]}</span>
+            <span className="step-dot-name">{labels[s]}</span>
           </button>
         );
       })}
@@ -82,6 +98,7 @@ function ChatBubble({
 
 export function BuildPage() {
   const { id: routeProjectId } = useParams<{ id?: string }>();
+  const location = useLocation();
   const dispatch = useAppDispatch();
   const projects = useProjects();
   const settings = useSettings();
@@ -109,6 +126,8 @@ export function BuildPage() {
   const [appDesc, setAppDesc] = useState("");
   const [plan, setPlan] = useState<AppPlan | null>(null);
   const [isPlanLoading, setIsPlanLoading] = useState(false);
+  const [builderMode, setBuilderMode] = useState<"standard" | "express">("standard");
+  const [expressError, setExpressError] = useState<string | null>(null);
   const [editingPlan, setEditingPlan] = useState(false);
   const [editFields, setEditFields] = useState({
     name: "",
@@ -130,6 +149,10 @@ export function BuildPage() {
   const [selectedAesthetic, setSelectedAesthetic] = useState<string>("");
   const [customAesthetic, setCustomAesthetic] = useState("");
   const [previewReloadNonce, setPreviewReloadNonce] = useState(0);
+  const [showDiff, setShowDiff] = useState(false);
+  const [prevCode, setPrevCode] = useState("");
+  const [streamingMsg, setStreamingMsg] = useState<string | null>(null);
+  const streamingMsgRef = useRef<string | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const chatInputRef = useRef<HTMLTextAreaElement>(null);
@@ -145,12 +168,64 @@ export function BuildPage() {
   const messagesRef = useRef(messages);
   const stepHistoryRef = useRef(stepHistory);
   const currentProjectIdRef = useRef<string | null>(currentProjectId);
+  const modeSteps = builderMode === "express" ? ([0, 1] as BuildStep[]) : ([0, 1, 2, 3, 4] as BuildStep[]);
+  const modeStepLabels = builderMode === "express" ? EXPRESS_STEP_LABELS : STEP_LABELS;
+  const modeStepDescriptions = builderMode === "express" ? EXPRESS_STEP_DESCRIPTIONS : STEP_DESCRIPTIONS;
+
+  const { isListening, supported: sttSupported, toggle: toggleMic } = useSpeechToText((text) => {
+    setChatInput((prev) => (prev ? `${prev} ${text}` : text));
+  });
 
   useEffect(() => {
     return () => {
       mountedRef.current = false;
     };
   }, []);
+
+  // ── Fresh-start when Home is re-clicked while already on "/" ─────────
+  const freshToken = (location.state as { fresh?: number } | null)?.fresh;
+  useEffect(() => {
+    if (!freshToken) return;
+    // Abort any in-flight request
+    if (activeRequestRef.current) {
+      activeRequestRef.current.controller.abort();
+      activeRequestRef.current = null;
+    }
+    // Clear session project tracking
+    sessionStorage.removeItem(BUILDER_SESSION_KEY);
+    setCurrentProjectId(null);
+    hydratedProjectId.current = null;
+    lastSavedSnapshot.current = "";
+    autoStarted.current = new Set();
+    // Reset all builder state
+    setStep(0);
+    setMaxReached(0);
+    setAppDesc("");
+    setPlan(null);
+    setIsPlanLoading(false);
+    setBuilderMode("standard");
+    setExpressError(null);
+    setEditingPlan(false);
+    setEditFields({ name: "", tagline: "", features: "", techApproach: "", complexity: "Medium" });
+    setCurrentCode("");
+    setCheckpoints([]);
+    setMessages([]);
+    setStepHistory({});
+    setIsLoading(false);
+    setChatInput("");
+    setShowCheckpoints(false);
+    setAestheticOptions([]);
+    setSelectedAesthetic("");
+    setCustomAesthetic("");
+    setPreviewReloadNonce(0);
+    setShowDiff(false);
+    setPrevCode("");
+    setStreamingMsg(null);
+    streamingMsgRef.current = null;
+    // Clear stale location state so navigating back doesn't re-trigger
+    window.history.replaceState({ ...window.history.state, usr: { fresh: null } }, "");
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [freshToken]);
 
   useEffect(() => {
     stepRef.current = step;
@@ -288,14 +363,36 @@ export function BuildPage() {
     const history = stepHistoryRef.current[s] ?? [];
     const waitingForAestheticChoice = s === 3 && !selectedAesthetic;
     try {
-      const response = await runBuilderStep(
+      // ── Streaming: accumulate raw buffer, extract partial message for live display ──
+      let rawBuf = "";
+      const onChunk = (delta: string) => {
+        rawBuf += delta;
+        // Try to extract the partial message field for a live preview
+        const msgStart = rawBuf.indexOf('"message":"');
+        if (msgStart !== -1) {
+          const after = rawBuf.slice(msgStart + 11);
+          // Unescape and show up to the first unescaped closing quote
+          const cleaned = after.replace(/\\n/g, " ").replace(/\\"/g, '"').replace(/\\t/g, " ");
+          const closeIdx = cleaned.search(/(?<!\\)"/);
+          const partial = closeIdx === -1 ? cleaned : cleaned.slice(0, closeIdx);
+          streamingMsgRef.current = partial;
+          if (mountedRef.current) setStreamingMsg(partial);
+        }
+      };
+
+      const response = await runBuilderStepStream(
         s,
         planRef.current,
         currentCodeRef.current,
         history,
         userMessage,
+        onChunk,
         controller.signal,
       );
+
+      // Clear streaming state once complete
+      streamingMsgRef.current = null;
+      if (mountedRef.current) setStreamingMsg(null);
 
       const nextStepHistory: Record<number, { role: string; content: string }[]> = {
         ...stepHistoryRef.current,
@@ -387,8 +484,10 @@ export function BuildPage() {
           ...checkpointsRef.current,
         ];
         if (mountedRef.current) {
+          setPrevCode(currentCodeRef.current);
           setCurrentCode(response.code);
           setCheckpoints(nextCheckpoints);
+          setShowDiff(false); // reset diff toggle on new code
         }
       }
 
@@ -409,6 +508,8 @@ export function BuildPage() {
         });
       }
     } catch (e: unknown) {
+      streamingMsgRef.current = null;
+      if (mountedRef.current) setStreamingMsg(null);
       if (e instanceof Error && e.name === "AbortError") {
         if (mountedRef.current) {
           addMsg(s, "ai", "Generation cancelled for this stage.");
@@ -419,6 +520,8 @@ export function BuildPage() {
         e instanceof Error
           ? e.message === "NO_API_KEY"
             ? "No API key found. Go to Settings → AI Provider and add your key."
+            : e.message === "NETWORK_ERROR"
+              ? "Network request failed while contacting AI. Try again or switch provider in Settings."
             : e.message
           : "Something went wrong. Please try again.";
       if (mountedRef.current) {
@@ -437,6 +540,10 @@ export function BuildPage() {
   // ── Step navigation ───────────────────────────────────────────────────
 
   function goToStep(nextStep: BuildStep) {
+    if (builderMode === "express" && nextStep > 1) {
+      return;
+    }
+
     if (nextStep !== step && activeRequestRef.current) {
       activeRequestRef.current.controller.abort();
       activeRequestRef.current = null;
@@ -455,7 +562,10 @@ export function BuildPage() {
     // Auto-start the step's initial AI message
     if (nextStep > 0 && !autoStarted.current.has(nextStep) && hasApiKey) {
       autoStarted.current.add(nextStep);
-      const intro = STEP_INTROS[nextStep];
+      const intro =
+        builderMode === "express"
+          ? "Build the complete app in one fast pass from this plan, then ask me for finishing touches I want to apply."
+          : STEP_INTROS[nextStep];
       if (intro) {
         // Defer to allow state to settle
         setTimeout(() => doChat(intro, nextStep as BuildStep), 100);
@@ -496,6 +606,63 @@ export function BuildPage() {
       });
     } catch (e: unknown) {
       alert(e instanceof Error ? e.message : "Failed to generate plan. Check your API key in Settings.");
+    } finally {
+      setIsPlanLoading(false);
+    }
+  }
+
+  async function handleExpressBuild() {
+    if (!appDesc.trim() || isPlanLoading) return;
+    setExpressError(null);
+    setIsPlanLoading(true);
+    try {
+      const p = await generatePlan(appDesc);
+      const nextProjectId = currentProjectId ?? uid();
+      if (!currentProjectId) {
+        setCurrentProjectId(nextProjectId);
+      }
+      hydratedProjectId.current = nextProjectId;
+      lastSavedSnapshot.current = "";
+      setPlan(p);
+      setCurrentCode("");
+      setCheckpoints([]);
+      setMessages([]);
+      setStepHistory({});
+      setSelectedAesthetic("");
+      setCustomAesthetic("");
+      setAestheticOptions([]);
+      autoStarted.current = new Set();
+      setStep(1);
+      setMaxReached(1);
+
+      dispatch({
+        type: "PROJECT_BUILDER_SAVE",
+        id: nextProjectId,
+        name: p.name,
+        status: "Draft",
+        builder: {
+          currentStep: 1,
+          plan: p,
+          generatedCode: "",
+          checkpoints: [],
+          messages: [],
+          stepHistory: {},
+        },
+      });
+
+      setTimeout(() => {
+        void doChat("Build the complete app in one fast pass from this plan, then suggest a few finishing touch edits.", 1);
+      }, 80);
+    } catch (e: unknown) {
+      const msg =
+        e instanceof Error
+          ? e.message === "NO_API_KEY"
+            ? "No API key found. Go to Settings and add at least one provider key before running Express Mode."
+            : e.message === "NETWORK_ERROR"
+              ? "Express Mode hit a network error while contacting AI. Please retry, or switch provider in Settings."
+              : e.message
+          : "Express build failed. Check your API key in Settings.";
+      setExpressError(msg);
     } finally {
       setIsPlanLoading(false);
     }
@@ -551,7 +718,33 @@ export function BuildPage() {
           </div>
         )}
 
+        {expressError && (
+          <div className="api-key-banner" role="alert" style={{ borderColor: "rgba(239,68,68,0.5)", background: "rgba(239,68,68,0.12)" }}>
+            <span>{expressError}</span>
+            <button type="button" className="banner-cta" onClick={() => setExpressError(null)}>
+              Dismiss
+            </button>
+          </div>
+        )}
+
         <GlassPanel>
+          <div className="mode-row" style={{ marginBottom: "0.65rem" }}>
+            <button
+              type="button"
+              className={builderMode === "standard" ? "chip active" : "chip"}
+              onClick={() => setBuilderMode("standard")}
+            >
+              Standard Mode
+            </button>
+            <button
+              type="button"
+              className={builderMode === "express" ? "chip active" : "chip"}
+              onClick={() => setBuilderMode("express")}
+            >
+              Express Mode
+            </button>
+          </div>
+
           <label htmlFor="app-desc" className="sr-only">App description</label>
           <textarea
             id="app-desc"
@@ -562,16 +755,22 @@ export function BuildPage() {
             disabled={!hasApiKey || isPlanLoading}
             onChange={(e) => setAppDesc(e.target.value)}
             onKeyDown={(e) => {
-              if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) handleGeneratePlan();
+              if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+                if (builderMode === "express") {
+                  void handleExpressBuild();
+                } else {
+                  void handleGeneratePlan();
+                }
+              }
             }}
           />
           <div style={{ display: "flex", justifyContent: "flex-end", marginTop: "0.75rem" }}>
             <button
               className="run-button"
-              onClick={handleGeneratePlan}
+              onClick={builderMode === "express" ? handleExpressBuild : handleGeneratePlan}
               disabled={!appDesc.trim() || isPlanLoading || !hasApiKey}
             >
-              {isPlanLoading ? <Spinner /> : "✦ Generate Plan"}
+              {isPlanLoading ? <Spinner /> : builderMode === "express" ? "⚡ Build In One Pass" : "✦ Generate Plan"}
             </button>
           </div>
         </GlassPanel>
@@ -649,8 +848,17 @@ export function BuildPage() {
                   {isPlanLoading ? <Spinner /> : "✦ Regenerate"}
                 </button>
                 <button className="text-button" onClick={startEditing}>✎ Edit plan</button>
-                <button className="run-button" onClick={() => goToStep(1)}>
-                  Start Building →
+                <button
+                  className="run-button"
+                  onClick={() => {
+                    if (builderMode === "express") {
+                      void handleExpressBuild();
+                    } else {
+                      goToStep(1);
+                    }
+                  }}
+                >
+                  {builderMode === "express" ? "Start Express →" : "Start Building →"}
                 </button>
               </div>
             </div>
@@ -719,14 +927,20 @@ export function BuildPage() {
 
   return (
     <div className="builder-root">
-      <StepBar step={step} maxReached={maxReached} onStepClick={goToStep} />
+      <StepBar
+        step={step}
+        maxReached={maxReached}
+        steps={modeSteps}
+        labels={modeStepLabels}
+        onStepClick={goToStep}
+      />
 
       <div className="builder-layout">
         {/* ── Chat column ── */}
         <div className="builder-chat-col">
           <div className="builder-step-header">
-            <h2 className="builder-step-title">{STEP_LABELS[step]}</h2>
-            <p className="builder-step-desc">{STEP_DESCRIPTIONS[step]}</p>
+            <h2 className="builder-step-title">{modeStepLabels[step]}</h2>
+            <p className="builder-step-desc">{modeStepDescriptions[step]}</p>
             {currentProjectId && plan && (
               <div className="builder-project-pill">
                 <span>Saved to Projects</span>
@@ -746,8 +960,11 @@ export function BuildPage() {
             ))}
             {isLoading && (
               <div className="chat-msg chat-msg--ai">
-                <div className="chat-msg-bubble chat-loading">
-                  <Spinner /> <span>Building…</span>
+                <div className={`chat-msg-bubble${streamingMsg ? " chat-streaming" : " chat-loading"}`}>
+                  {streamingMsg
+                    ? <span className="chat-streaming-text">{streamingMsg}<span className="chat-cursor">▌</span></span>
+                    : <><Spinner /> <span>Building…</span></>
+                  }
                 </div>
               </div>
             )}
@@ -791,7 +1008,7 @@ export function BuildPage() {
 
           {/* Input */}
           <div className="chat-input-area">
-            {step === 3 && (
+            {builderMode === "standard" && step === 3 && (
               <div className="aesthetic-picker">
                 <p className="aesthetic-picker-title">
                   Pick an aesthetic direction before generation
@@ -846,7 +1063,9 @@ export function BuildPage() {
               ref={chatInputRef}
               className="chat-input"
               placeholder={
-                step === 4
+                builderMode === "express"
+                  ? "Ask for finishing touches, edits, and improvements…"
+                  : step === 4
                   ? "Answer AI's questions or ask for changes…"
                   : step === 3 && !selectedAesthetic
                     ? "Pick an aesthetic first, then refine it here…"
@@ -854,7 +1073,7 @@ export function BuildPage() {
               }
               value={chatInput}
               rows={2}
-              disabled={isLoading || !hasApiKey || (step === 3 && !selectedAesthetic)}
+              disabled={isLoading || !hasApiKey || (builderMode === "standard" && step === 3 && !selectedAesthetic)}
               onChange={(e) => {
                 setChatInput(e.target.value);
                 const el = e.target;
@@ -866,6 +1085,17 @@ export function BuildPage() {
               }}
             />
             <div className="chat-input-btns">
+              {sttSupported && (
+                <button
+                  type="button"
+                  className={`icon-btn mic-btn${isListening ? " mic-btn--active" : ""}`}
+                  onClick={toggleMic}
+                  title={isListening ? "Stop listening" : "Speak your prompt"}
+                  aria-label={isListening ? "Stop listening" : "Voice input"}
+                >
+                  {isListening ? "◼" : "🎙"}
+                </button>
+              )}
               <button
                 className="run-button"
                 onClick={() => doChat(chatInput)}
@@ -873,14 +1103,14 @@ export function BuildPage() {
               >
                 {isLoading ? <Spinner /> : "Send"}
               </button>
-              {step < 4 ? (
+              {builderMode === "standard" && step < 4 ? (
                 <button
                   className="next-step-btn"
                   onClick={() => goToStep((step + 1) as BuildStep)}
                   disabled={!currentCode}
                   title="Move to the next step"
                 >
-                  {STEP_LABELS[(step + 1) as BuildStep]} →
+                  {modeStepLabels[(step + 1) as BuildStep]} →
                 </button>
               ) : (
                 <button
@@ -907,23 +1137,37 @@ export function BuildPage() {
         {/* ── Preview column ── */}
         <div className="builder-preview-col">
           <div className="preview-header">
-            <span className="preview-label">Live Preview</span>
+            <span className="preview-label">{showDiff ? "Diff View" : "Live Preview"}</span>
             <div style={{ display: "flex", alignItems: "center", gap: "0.55rem" }}>
-              {currentCode && (
+              {currentCode && !showDiff && (
                 <span className="preview-badge">● Running</span>
               )}
-              <button
-                type="button"
-                className="text-button"
-                onClick={() => setPreviewReloadNonce((n) => n + 1)}
-                disabled={!currentCode}
-                title="Reload preview"
-              >
-                Reload
-              </button>
+              {prevCode && currentCode && (
+                <button
+                  type="button"
+                  className={`text-button${showDiff ? " active" : ""}`}
+                  onClick={() => setShowDiff((v) => !v)}
+                  title="Toggle before/after diff"
+                >
+                  {showDiff ? "← Preview" : "⊟ Diff"}
+                </button>
+              )}
+              {!showDiff && (
+                <button
+                  type="button"
+                  className="text-button"
+                  onClick={() => setPreviewReloadNonce((n) => n + 1)}
+                  disabled={!currentCode}
+                  title="Reload preview"
+                >
+                  Reload
+                </button>
+              )}
             </div>
           </div>
-          <LivePreview code={currentCode} reloadNonce={previewReloadNonce} />
+          {showDiff
+            ? <DiffView oldCode={prevCode} newCode={currentCode} />
+            : <LivePreview code={currentCode} reloadNonce={previewReloadNonce} />}
         </div>
       </div>
     </div>

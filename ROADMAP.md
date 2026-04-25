@@ -68,13 +68,6 @@ Multi-user support.
 - Role-based API key management
 - Needs: backend (auth, DB), currently fully client-side — this is a larger scope item
 
-### ⚡ Prompt Library
-Save and reuse prompts.
-- Save any run to the library with a name + tags
-- Browse/search saved prompts
-- One-click to load a saved prompt into the composer
-- Needs: `prompts` slice in app state, `/library` route, tag filter UI
-
 ---
 
 ## 💡 Unused Ideas / Backlog
@@ -83,59 +76,50 @@ Save and reuse prompts.
 
 ### 🔴 Now
 
-- **Express Mode (1-stage builder)** — Add a mode switch in the top-right corner that runs a single fast stage from one prompt.
-  - Flow: user enters one prompt → AI plans, functionalises, and designs in one run → user is taken to an **Edit** page.
-  - Edit page: user can ask AI for targeted changes, AI returns proactive edit suggestions, and the page keeps a live preview.
-  - Output: include a prominent final download button after edits are complete.
-  - Needs: mode toggle UI (Standard vs Express), express pipeline prompt template, new `/edit` route, shared checkpoint/history model so Express edits still save to Projects.
-
-  - Web deploy: Netlify/Vercel/GitHub Pages upload and return live URL.
-  - Progressive Web App: inject service worker + manifest.
-  - Mobile App Store: Capacitor/Cordova wrapper and store upload pipeline.
-  - Needs: server-side deployment proxy, domain mapping, optional custom domains.
-- **Diff view** — side-by-side before/after for refactor/edit outputs.
-- **Streaming responses** — token streaming instead of full-response waiting.
+- **Usage page** with charts and cost tracking
 - **AI Critic Pass** — second-pass scoring for UX, accessibility, and performance with one-click fixes.
 - **Component Locking** — lock sections so AI can't change protected blocks.
 - **Time Travel Editor** — visual timeline with snapshot rollback.
 - **Release Readiness Score** — final score + checklist for UX/a11y/responsive/perf.
-- **Speech-to-Text** — you can talk to the AI instead of typing.
 - **VibesAI Visual Identity Pass** — refine this app's own look to feel more premium and distinct.
   - Improve left-dial/nav readability and hierarchy while keeping the signature look.
   - Tighten spacing rhythm and panel balance across Builder, Projects, Settings, and Account.
   - Add cohesive motion language (entry transitions, state changes, and feedback timing).
 - **Aesthetic Presets for VibesAI UI** — switchable in-app skins for this product itself (not generated apps), e.g. Glass Neon, Editorial Soft, Minimal Mono.
 - **Design QA for VibesAI Surfaces** — checklist + automated pass for contrast, visual consistency, and mobile polish of this app's own interface.
-
-### 🟠 Next
-
-
-- **Deploy to Web / App Store** — publish generated apps directly from the builder.
 - **Brand DNA Presets** — reusable brand packs (color, type, spacing, voice).
 - **Aesthetic Direction Generator** — AI proposes 3 distinct visual directions (plus custom) before applying design changes.
 - **Theme Mixer** — blend two styles (e.g., "neo brutalist + glass") with adjustable intensity sliders.
 - **Visual Consistency Pass** — normalize spacing, radius, type scale, icon style, and shadow language across all screens.
+- **Dark/light branded export cards** — social-ready share cards.
+- **Export** — richer download formats (.txt/.md/.docx) and rich-copy support.
+- **Smart Naming Pass** — semantic rename pass for sections/components/classes.
 - **Motion Design Pass** — apply purposeful micro-interactions, page transitions, and staggered reveals with timing controls.
 - **Color System Studio** — generate semantic palettes (primary/success/warn/error/surface states) with contrast validation.
-- **Screenshot-to-UI Rebuild** — upload screenshot and rebuild editable interface.
 - **AI Conversation Mode** — multi-turn back-and-forth with the AI, with memory and context, to design your app.
 - **Voice-to-App Mode** — voice-first prompt/refinement workflow.
+- **Prompt Cost Estimator** — pre-run cost forecast + cheaper model suggestions.
+
+### 🟠 Next
+
+- **Screenshot-to-UI Rebuild** — upload screenshot and rebuild editable interface.
 - **Business Logic Wizard** — guided setup for rules, permissions, workflows.
 - **Prompt-to-Database Schema** — derive entities and relations from prompt.
 - **API Connection Mapper** — scaffold endpoint wiring + loading/error/auth states.
 - **Data Seeder** — realistic mock datasets for generated apps.
 - **Built-In Analytics Starter** — inject event tracking scaffolding.
-- **Prompt Cost Estimator** — pre-run cost forecast + cheaper model suggestions.
 - **Accessibility Hardening Mode** — one-click WCAG-focused cleanup pass.
-- **Smart Naming Pass** — semantic rename pass for sections/components/classes.
 - **Multi-Page App Map** — route-first generation flow.
-- **Export** — richer download formats (.txt/.md/.docx) and rich-copy support.
-- **Dark/light branded export cards** — social-ready share cards.
 - **Project-scoped context** — per-project system prompt, style guide, and memory.
 
 ### 🟢 Later
 
-- **Competitive Clone Mode** — inspired layout/interaction recreation from URLs.
+- **Deploy to Web / App Store** — publish generated apps directly from the builder.
+  - Web deploy: Netlify/Vercel/GitHub Pages upload and return live URL.
+  - Progressive Web App: inject service worker + manifest.
+  - Mobile App Store: Capacitor/Cordova wrapper and store upload pipeline.
+  - Needs: server-side deployment proxy, domain mapping, optional custom domains.
+  - **Competitive Clone Mode** — inspired layout/interaction recreation from URLs.
 - **User Journey Simulator** — persona-based friction analysis.
 - **Collaboration Review Links** — comment-on-preview collaboration links.
 - **Collaborative sessions** — real-time co-editing via WebSocket.
@@ -169,5 +153,12 @@ Save and reuse prompts.
 - Splash screen with 3D press animation, theme-aware logo
 - Persistent settings via localStorage
 - Notification system
-- Projects page (empty, ready for data)
+- Prompt Library (`/library`) with save/search/filter/delete and one-click load into AI Chat
+- Express Mode (Standard vs Express toggle, 2-step plan + finishing-touches flow)
+- Projects page with persistence, exports/imports, and builder resume
 - Account page
+- Onboarding page for first-time users
+- Home button reset (re-click clears builder to fresh start, project stays saved)
+- **Diff view** — before/after code diff in the builder preview panel (toggle ⊟ Diff button)
+- **Streaming responses** — live token streaming with partial message preview and blinking cursor
+- **Speech-to-Text** — mic button in builder and AI Chat inputs using browser SpeechRecognition API

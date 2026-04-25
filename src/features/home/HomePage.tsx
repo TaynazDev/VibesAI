@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { NavLink } from "react-router-dom";
+import { NavLink, useLocation } from "react-router-dom";
 import { Spinner } from "../../components/Spinner";
 import { runAI, type AIOptions } from "../../services/aiService";
 import { useAppDispatch, useSettings } from "../../store/AppContext";
+import { useSpeechToText } from "../../hooks/useSpeechToText";
 
 type ChatMessage = {
   id: string;
@@ -72,6 +73,7 @@ function buildChatPrompt(messages: ChatMessage[], userInput: string): string {
 }
 
 export function HomePage() {
+  const location = useLocation();
   const dispatch = useAppDispatch();
   const settings = useSettings();
 
@@ -84,6 +86,9 @@ export function HomePage() {
   const [history, setHistory] = useState<ChatSession[]>([]);
   const [activeHistoryId, setActiveHistoryId] = useState<string>("");
   const [input, setInput] = useState("");
+  const { isListening, supported: sttSupported, toggle: toggleMic } = useSpeechToText((text) => {
+    setInput((prev) => (prev ? `${prev} ${text}` : text));
+  });
   const [isRunning, setIsRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const messagesRef = useRef<ChatMessage[]>([]);
@@ -149,6 +154,16 @@ export function HomePage() {
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
   }, [messages, isRunning]);
+
+  useEffect(() => {
+    const routeState = location.state as { prompt?: string } | null;
+    if (!routeState?.prompt) {
+      return;
+    }
+    setInput(routeState.prompt);
+    setTimeout(() => inputRef.current?.focus(), 80);
+    window.history.replaceState({ ...window.history.state, usr: null }, "");
+  }, [location.state]);
 
   const placeholder = useMemo(() => {
     if (!hasApiKey) {
@@ -236,6 +251,37 @@ export function HomePage() {
     } finally {
       setIsRunning(false);
     }
+  }
+
+  function saveCurrentPrompt() {
+    const content = input.trim();
+    if (!content) {
+      return;
+    }
+
+    const firstLine = content.split("\n").map((line) => line.trim()).find(Boolean) ?? "Saved prompt";
+    const name = firstLine.length > 44 ? `${firstLine.slice(0, 44)}...` : firstLine;
+    const tags = Array.from(new Set(content.match(/#([a-zA-Z0-9_-]+)/g)?.map((raw) => raw.slice(1).toLowerCase()) ?? []));
+
+    dispatch({
+      type: "PROMPT_SAVE",
+      template: {
+        name,
+        prompt: content,
+        tags,
+      },
+    });
+
+    dispatch({
+      type: "NOTIFICATION_ADD",
+      notification: {
+        title: "Prompt saved",
+        detail: `${name} added to Prompt Library.`,
+        timestamp: "just now",
+        unread: true,
+        kind: "system",
+      },
+    });
   }
 
   return (
@@ -338,6 +384,25 @@ export function HomePage() {
             }}
           />
           <div className="chat-input-btns">
+            {sttSupported && (
+              <button
+                type="button"
+                className={`icon-btn mic-btn${isListening ? " mic-btn--active" : ""}`}
+                onClick={toggleMic}
+                title={isListening ? "Stop listening" : "Speak your prompt"}
+                aria-label={isListening ? "Stop listening" : "Voice input"}
+              >
+                {isListening ? "◼" : "🎙"}
+              </button>
+            )}
+            <button
+              type="button"
+              className="text-button"
+              onClick={saveCurrentPrompt}
+              disabled={!input.trim() || isRunning}
+            >
+              Save Prompt
+            </button>
             <button
               className="run-button"
               onClick={() => void sendMessage()}

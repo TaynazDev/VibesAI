@@ -37,9 +37,18 @@ export type AuthState = {
   focus: string;
 };
 
+export type PromptTemplate = {
+  id: string;
+  name: string;
+  prompt: string;
+  tags: string[];
+  updatedAt: string;
+};
+
 type AppState = {
   projects: Project[];
   notifications: AppNotification[];
+  promptLibrary: PromptTemplate[];
   settings: Settings;
   auth: AuthState;
 };
@@ -58,6 +67,8 @@ type Action =
   | { type: "NOTIFICATION_CLEAR_READ" }
   | { type: "NOTIFICATION_DELETE"; id: string }
   | { type: "NOTIFICATION_ADD"; notification: Omit<AppNotification, "id"> }
+  | { type: "PROMPT_SAVE"; template: Omit<PromptTemplate, "id" | "updatedAt"> }
+  | { type: "PROMPT_DELETE"; id: string }
   | { type: "SETTINGS_UPDATE"; patch: Partial<Settings> }
   | { type: "AUTH_UPDATE"; patch: Partial<AuthState> };
 
@@ -100,6 +111,7 @@ function buildInitialState(): AppState {
   return {
     projects: p.projects ?? mockProjects,
     notifications: p.notifications ?? mockNotifications,
+    promptLibrary: p.promptLibrary ?? [],
     settings: { ...defaultSettings, ...(p.settings ?? {}) },
     auth: { ...defaultAuth, ...(p.auth ?? {}) },
   };
@@ -238,6 +250,23 @@ function reducer(state: AppState, action: Action): AppState {
         ...state,
         notifications: [{ ...action.notification, id: uid() }, ...state.notifications],
       };
+    case "PROMPT_SAVE":
+      return {
+        ...state,
+        promptLibrary: [
+          {
+            id: uid(),
+            ...action.template,
+            updatedAt: "just now",
+          },
+          ...state.promptLibrary,
+        ],
+      };
+    case "PROMPT_DELETE":
+      return {
+        ...state,
+        promptLibrary: state.promptLibrary.filter((template) => template.id !== action.id),
+      };
     case "SETTINGS_UPDATE":
       return { ...state, settings: { ...state.settings, ...action.patch } };
     case "AUTH_UPDATE":
@@ -299,4 +328,8 @@ export function useSettings() {
 
 export function useAuth() {
   return useAppState().auth;
+}
+
+export function usePromptLibrary() {
+  return useAppState().promptLibrary;
 }

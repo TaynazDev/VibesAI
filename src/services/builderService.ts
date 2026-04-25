@@ -58,6 +58,92 @@ async function callOpenAI(messages: Msg[], apiKey: string, signal?: AbortSignal)
   return data.choices[0].message.content ?? "";
 }
 
+async function streamOpenAI(
+  messages: Msg[],
+  apiKey: string,
+  onChunk: (delta: string) => void,
+  signal?: AbortSignal,
+): Promise<string> {
+  const res = await fetch("https://api.openai.com/v1/chat/completions", {
+    method: "POST",
+    signal,
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
+    body: JSON.stringify({
+      model: "gpt-4o-mini",
+      messages,
+      temperature: 0.7,
+      max_tokens: 8000,
+      stream: true,
+    }),
+  });
+  if (!res.ok) throw new Error(await res.text());
+  const reader = res.body!.getReader();
+  const decoder = new TextDecoder();
+  let full = "";
+  let buf = "";
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buf += decoder.decode(value, { stream: true });
+    const lines = buf.split("\n");
+    buf = lines.pop() ?? "";
+    for (const line of lines) {
+      if (!line.startsWith("data: ")) continue;
+      const data = line.slice(6).trim();
+      if (data === "[DONE]") continue;
+      try {
+        const parsed = JSON.parse(data) as { choices: { delta: { content?: string } }[] };
+        const delta = parsed.choices[0]?.delta?.content ?? "";
+        if (delta) { full += delta; onChunk(delta); }
+      } catch { /* skip malformed SSE lines */ }
+    }
+  }
+  return full;
+}
+
+async function streamOpenRouter(
+  messages: Msg[],
+  apiKey: string,
+  model: string,
+  onChunk: (delta: string) => void,
+  signal?: AbortSignal,
+): Promise<string> {
+  const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+    method: "POST",
+    signal,
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${apiKey}`,
+      "HTTP-Referer": "https://vibesai.app",
+      "X-Title": "VibesAI Builder",
+    },
+    body: JSON.stringify({ model, messages, temperature: 0.7, max_tokens: 8000, stream: true }),
+  });
+  if (!res.ok) throw new Error(await res.text());
+  const reader = res.body!.getReader();
+  const decoder = new TextDecoder();
+  let full = "";
+  let buf = "";
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buf += decoder.decode(value, { stream: true });
+    const lines = buf.split("\n");
+    buf = lines.pop() ?? "";
+    for (const line of lines) {
+      if (!line.startsWith("data: ")) continue;
+      const data = line.slice(6).trim();
+      if (data === "[DONE]") continue;
+      try {
+        const parsed = JSON.parse(data) as { choices: { delta: { content?: string } }[] };
+        const delta = parsed.choices[0]?.delta?.content ?? "";
+        if (delta) { full += delta; onChunk(delta); }
+      } catch { /* skip malformed SSE lines */ }
+    }
+  }
+  return full;
+}
+
 async function callOpenRouter(messages: Msg[], apiKey: string, model: string, signal?: AbortSignal): Promise<string> {
   const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
     method: "POST",
@@ -98,21 +184,86 @@ async function callGemma(systemPrompt: string, history: Msg[], apiKey: string, s
   return data.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
 }
 
+function normalizeBuilderError(error: unknown): Error {
+  if (error instanceof Error) {
+    if (error.name === "AbortError") return error;
+    if (error.message.toLowerCase().includes("failed to fetch")) {
+      return new Error("NETWORK_ERROR");
+    }
+    return error;
+  }
+  return new Error("Builder request failed.");
+}
+
+function isRetriableBuilderError(message: string): boolean {
+  const m = message.toLowerCase();
+  return (
+    m.includes("network_error") ||
+    m.includes("failed to fetch") ||
+    m.includes("load failed") ||
+    m.includes("no_api_key") ||
+    m.includes("no api key") ||
+    m.includes("unauthorized") ||
+    m.includes("invalid api key") ||
+    m.includes("invalid authentication") ||
+    m.includes("rate limit") ||
+    m.includes("too many requests") ||
+    m.includes("overloaded") ||
+    m.includes("401") ||
+    m.includes("403") ||
+    m.includes("429") ||
+    m.includes("500") ||
+    m.includes("502") ||
+    m.includes("503") ||
+    m.includes("504")
+  );
+}
+
 async function callAI(systemPrompt: string, history: Msg[], signal?: AbortSignal): Promise<string> {
   const s = getSettings();
   const provider = s.provider ?? "openai";
   const messages: Msg[] = [{ role: "system", content: systemPrompt }, ...history];
 
-  if (provider === "openrouter") {
-    if (!s.openrouterKey) throw new Error("NO_API_KEY");
-    return callOpenRouter(messages, s.openrouterKey, s.openrouterModel ?? "google/gemma-3-27b-it", signal);
+  const providerOrder = ([provider, "openai", "openrouter", "gemma"] as const)
+    .filter((p, i, arr) => arr.indexOf(p) === i);
+
+  let sawUsableKey = false;
+  let lastError: Error | null = null;
+
+  for (const candidate of providerOrder) {
+    try {
+      if (candidate === "openai") {
+        const key = s.apiKey?.trim() ?? "";
+        if (!key) continue;
+        sawUsableKey = true;
+        return await callOpenAI(messages, key, signal);
+      }
+
+      if (candidate === "openrouter") {
+        const key = s.openrouterKey?.trim() ?? "";
+        if (!key) continue;
+        sawUsableKey = true;
+        return await callOpenRouter(messages, key, s.openrouterModel ?? "google/gemma-3-27b-it", signal);
+      }
+
+      const key = s.gemmaKey?.trim() ?? "";
+      if (!key) continue;
+      sawUsableKey = true;
+      return await callGemma(systemPrompt, history, key, signal);
+    } catch (error: unknown) {
+      const e = normalizeBuilderError(error);
+      if (e.name === "AbortError") throw e;
+      if (!isRetriableBuilderError(e.message)) {
+        throw e;
+      }
+      lastError = e;
+    }
   }
-  if (provider === "gemma") {
-    if (!s.gemmaKey) throw new Error("NO_API_KEY");
-    return callGemma(systemPrompt, history, s.gemmaKey, signal);
+
+  if (!sawUsableKey) {
+    throw new Error("NO_API_KEY");
   }
-  if (!s.apiKey) throw new Error("NO_API_KEY");
-  return callOpenAI(messages, s.apiKey, signal);
+  throw lastError ?? new Error("Builder provider request failed.");
 }
 
 // ── System prompts ───────────────────────────────────────────────────────
@@ -169,6 +320,57 @@ ${JSON_RULE}
   return planSystemPrompt();
 }
 
+// ── Streaming callAI ─────────────────────────────────────────────────────
+
+async function callAIStream(
+  systemPrompt: string,
+  history: Msg[],
+  onChunk: (delta: string) => void,
+  signal?: AbortSignal,
+): Promise<string> {
+  const s = getSettings();
+  const provider = s.provider ?? "openai";
+  const messages: Msg[] = [{ role: "system", content: systemPrompt }, ...history];
+
+  const providerOrder = ([provider, "openai", "openrouter", "gemma"] as const)
+    .filter((p, i, arr) => arr.indexOf(p) === i);
+
+  let sawUsableKey = false;
+  let lastError: Error | null = null;
+
+  for (const candidate of providerOrder) {
+    try {
+      if (candidate === "openai") {
+        const key = s.apiKey?.trim() ?? "";
+        if (!key) continue;
+        sawUsableKey = true;
+        return await streamOpenAI(messages, key, onChunk, signal);
+      }
+      if (candidate === "openrouter") {
+        const key = s.openrouterKey?.trim() ?? "";
+        if (!key) continue;
+        sawUsableKey = true;
+        return await streamOpenRouter(messages, key, s.openrouterModel ?? "google/gemma-3-27b-it", onChunk, signal);
+      }
+      // Gemma doesn't support SSE the same way — fall back to non-streaming
+      const key = s.gemmaKey?.trim() ?? "";
+      if (!key) continue;
+      sawUsableKey = true;
+      const result = await callGemma(systemPrompt, history, key, signal);
+      onChunk(result);
+      return result;
+    } catch (error: unknown) {
+      const e = normalizeBuilderError(error);
+      if (e.name === "AbortError") throw e;
+      if (!isRetriableBuilderError(e.message)) throw e;
+      lastError = e;
+    }
+  }
+
+  if (!sawUsableKey) throw new Error("NO_API_KEY");
+  throw lastError ?? new Error("Builder provider request failed.");
+}
+
 // ── Public API ───────────────────────────────────────────────────────────
 
 export async function generatePlan(description: string): Promise<AppPlan> {
@@ -199,6 +401,32 @@ export async function runBuilderStep(
   const sysPrompt = stepSystemPrompt(step, plan, currentCode);
   const fullHistory = [...history, { role: "user", content: userMessage }];
   const raw = await callAI(sysPrompt, fullHistory, signal);
+  const parsed = extractJSON(raw);
+  if (!parsed) {
+    return {
+      message: raw || "Couldn't generate a response. Please try again.",
+      suggestions: ["Try again", "Simplify the request"],
+    };
+  }
+  return {
+    code: typeof parsed.code === "string" && parsed.code.includes("<") ? parsed.code : undefined,
+    message: typeof parsed.message === "string" ? parsed.message : "Done!",
+    suggestions: Array.isArray(parsed.suggestions) ? (parsed.suggestions as string[]) : [],
+  };
+}
+
+export async function runBuilderStepStream(
+  step: BuildStep,
+  plan: AppPlan | null,
+  currentCode: string,
+  history: Msg[],
+  userMessage: string,
+  onChunk: (delta: string) => void,
+  signal?: AbortSignal,
+): Promise<BuilderResponse> {
+  const sysPrompt = stepSystemPrompt(step, plan, currentCode);
+  const fullHistory = [...history, { role: "user", content: userMessage }];
+  const raw = await callAIStream(sysPrompt, fullHistory, onChunk, signal);
   const parsed = extractJSON(raw);
   if (!parsed) {
     return {

@@ -4,6 +4,7 @@ import { useNotifications, useSettings } from "../store/AppContext";
 
 const ITEMS = [
   { label: "AI Chat",       to: "/ai-chat",       icon: "✧" },
+  { label: "Library",       to: "/library",       icon: "⚡" },
   { label: "Projects",      to: "/projects",      icon: "◫" },
   { label: "Alerts",        to: "/notifications", icon: "◉" },
   { label: "Home",          to: "/",              icon: "⌂" },
@@ -57,7 +58,13 @@ export function Dock() {
               key={item.to}
               className={`dial-btn${isActive ? " active" : ""}`}
               style={{ transform: `translate(${-xPull}px, calc(-50% + ${yOffset}px))`, opacity }}
-              onClick={() => navigate(item.to)}
+              onClick={() => {
+                if (item.to === "/" && pathname === "/") {
+                  navigate("/", { state: { fresh: Date.now() }, replace: false });
+                } else {
+                  navigate(item.to);
+                }
+              }}
               aria-label={item.label}
               aria-current={isActive ? "page" : undefined}
               title={item.label}

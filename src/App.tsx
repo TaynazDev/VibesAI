@@ -6,8 +6,10 @@ import { SplashScreen } from "./components/SplashScreen";
 import { AccountPage } from "./features/account/AccountPage";
 import { BuildPage } from "./features/builder/BuildPage";
 import { ComingSoonPage } from "./features/coming-soon/ComingSoonPage";
+import { ExpressEditPage } from "./features/express/ExpressEditPage";
 import { HomePage } from "./features/home/HomePage";
 import { NotificationsPage } from "./features/notifications/NotificationsPage";
+import { PromptLibraryPage } from "./features/library/PromptLibraryPage";
 import { ProjectDetailPage } from "./features/projects/ProjectDetailPage";
 import { ProjectsPage } from "./features/projects/ProjectsPage";
 import { SettingsPage } from "./features/settings/SettingsPage";
@@ -84,9 +86,11 @@ function AppInner() {
         <Route path="/ai-chat" element={<HomePage />} />
         <Route path="/" element={<BuildPage />} />
         <Route path="/builder/:id" element={<BuildPage />} />
+        <Route path="/edit/:id" element={<ExpressEditPage />} />
         <Route path="/coming-soon" element={<ComingSoonPage />} />
         <Route path="/projects" element={<ProjectsPage />} />
         <Route path="/projects/:id" element={<ProjectDetailPage />} />
+        <Route path="/library" element={<PromptLibraryPage />} />
         <Route path="/notifications" element={<NotificationsPage />} />
         <Route path="/settings" element={<SettingsPage />} />
         <Route path="/account" element={<AccountPage />} />
