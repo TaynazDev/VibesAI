@@ -6,6 +6,7 @@ const ITEMS = [
   { label: "AI Chat",       to: "/ai-chat",       icon: "✧" },
   { label: "Library",       to: "/library",       icon: "⚡" },
   { label: "Projects",      to: "/projects",      icon: "◫" },
+  { label: "Analytics",     to: "/analytics",     icon: "📊" },
   { label: "Alerts",        to: "/notifications", icon: "◉" },
   { label: "Home",          to: "/",              icon: "⌂" },
   { label: "Soon",          to: "/coming-soon",   icon: "✦" },

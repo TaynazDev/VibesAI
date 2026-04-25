@@ -144,6 +144,50 @@ function loadPersisted(): Partial<AppState> {
   }
 }
 
+// Generate mock usage data for testing analytics
+function generateMockUsageData(): UsageRecord[] {
+  const models = ["gpt-4", "gpt-3.5-turbo", "claude-3-opus", "gemma-2-27b"];
+  const modes: Array<"text" | "image"> = ["text", "image"];
+  const records: UsageRecord[] = [];
+  
+  // Generate data for past 30 days
+  for (let dayOffset = 30; dayOffset >= 0; dayOffset--) {
+    const timestamp = Date.now() - dayOffset * 24 * 60 * 60 * 1000;
+    const requestsPerDay = Math.floor(Math.random() * 8) + 2; // 2-10 requests
+    
+    for (let i = 0; i < requestsPerDay; i++) {
+      const model = models[Math.floor(Math.random() * models.length)];
+      const mode = modes[Math.floor(Math.random() * modes.length)];
+      const inputTokens = Math.floor(Math.random() * 1000) + 100;
+      const outputTokens = Math.floor(Math.random() * 500) + 50;
+      
+      // Pricing per 1M tokens (rough estimates)
+      const pricingMap: Record<string, { input: number; output: number }> = {
+        "gpt-4": { input: 30, output: 60 },
+        "gpt-3.5-turbo": { input: 0.5, output: 1.5 },
+        "claude-3-opus": { input: 15, output: 75 },
+        "gemma-2-27b": { input: 0.1, output: 0.3 },
+      };
+      
+      const pricing = pricingMap[model] || { input: 1, output: 2 };
+      const cost = (inputTokens * pricing.input + outputTokens * pricing.output) / 1000000;
+      
+      records.push({
+        id: Math.random().toString(36).slice(2, 10),
+        timestamp: timestamp + Math.random() * 24 * 60 * 60 * 1000,
+        model,
+        mode,
+        inputTokens,
+        outputTokens,
+        cost: parseFloat(cost.toFixed(6)),
+      });
+    }
+  }
+  
+  return records;
+}
+
+
 function buildInitialState(): AppState {
   const p = loadPersisted();
   return {
@@ -152,7 +196,7 @@ function buildInitialState(): AppState {
     promptLibrary: p.promptLibrary ?? [],
     settings: { ...defaultSettings, ...(p.settings ?? {}) },
     auth: { ...defaultAuth, ...(p.auth ?? {}) },
-    usage: p.usage ?? [],
+    usage: p.usage ?? generateMockUsageData(),
     snapshots: p.snapshots ?? [],
     criticScores: p.criticScores ?? [],
   };

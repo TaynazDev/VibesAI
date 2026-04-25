@@ -6,6 +6,7 @@ import { VoiceFloatingOverlay } from "../../components/VoiceFloatingOverlay";
 import { AICriticPassModal } from "../../components/AICriticPassModal";
 import { ReleaseReadinessModal } from "../../components/ReleaseReadinessModal";
 import { TimeTravelPanel } from "../../components/TimeTravelPanel";
+import { VisualPassModal } from "../../components/VisualPassModal";
 import { generatePlan, runBuilderStepStream } from "../../services/builderService";
 import { useAppDispatch, useProjects, useSettings } from "../../store/AppContext";
 import { useAudioVisualizer } from "../../hooks/useAudioVisualizer";
@@ -161,6 +162,7 @@ export function BuildPage() {
   const [showCriticPass, setShowCriticPass] = useState(false);
   const [showTimeTravelPanel, setShowTimeTravelPanel] = useState(false);
   const [showReleaseScore, setShowReleaseScore] = useState(false);
+  const [showVisualPass, setShowVisualPass] = useState(false);
   const streamingMsgRef = useRef<string | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -1320,6 +1322,14 @@ export function BuildPage() {
               >
                 📋 Release
               </button>
+              <button
+                type="button"
+                className="text-button"
+                onClick={() => setShowVisualPass(true)}
+                title="Visual Polish Pass"
+              >
+                ✨ Polish
+              </button>
               {prevCode && currentCode && (
                 <button
                   type="button"
@@ -1375,6 +1385,14 @@ export function BuildPage() {
         <ReleaseReadinessModal
           projectId={currentProjectId || ""}
           onClose={() => setShowReleaseScore(false)}
+        />
+      )}
+
+      {showVisualPass && (
+        <VisualPassModal
+          projectId={currentProjectId || ""}
+          builder={builderProject?.builder}
+          onClose={() => setShowVisualPass(false)}
         />
       )}
     </div>

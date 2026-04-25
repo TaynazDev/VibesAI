@@ -2,6 +2,29 @@
 
 All notable changes to VibesAI are documented in this file.
 
+## 2026-04-26
+
+### Added
+- **Analytics Navigation Integration**:
+  - Added Analytics (📊) to Dock sidebar between Projects and Alerts
+  - Full navigation integration for usage analytics dashboard
+- **Visual Polish Pass Modal**:
+  - AI-powered visual design suggestions (spacing, typography, contrast, animations)
+  - Category breakdown scores (spacing, typography, contrast, consistency, animation)
+  - Interactive suggestion cards with severity badges and apply samples
+  - Overall polish score (0-100%)
+  - Accessible from Builder via ✨ Polish button
+- **Mock Usage Data Generator**:
+  - Auto-generates 30 days of sample usage records on first app load
+  - Includes realistic model mix (gpt-4, gpt-3.5-turbo, claude-3-opus, gemma-2-27b)
+  - Realistic token ranges and cost calculations based on model pricing
+  - Enables AnalyticsPage to display populated charts without manual data entry
+  - Distributed across day/week/month for filtering demonstration
+
+### Changed
+- AppContext `buildInitialState()` now generates mock UsageRecord data by default
+- Mock data generator respects localStorage persistence (doesn't regenerate if saved state exists)
+
 ## 2026-04-25
 
 ### Added
