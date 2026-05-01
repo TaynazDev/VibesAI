@@ -2,6 +2,8 @@ import { useMemo, useState } from "react";
 import { GlassPanel } from "../../components/GlassPanel";
 import { useAppDispatch, useNotifications, useProjects, useSettings, type Settings } from "../../store/AppContext";
 
+type Provider = Settings["provider"];
+
 const OPENROUTER_FREE_MODELS = [
   { value: "google/gemma-2-9b-it:free", label: "Gemma 2 9B Instruct — Free" },
   { value: "meta-llama/llama-3.2-3b-instruct:free", label: "Llama 3.2 3B Instruct — Free" },
@@ -26,6 +28,10 @@ export function SettingsPage() {
   const [showOpenAI, setShowOpenAI] = useState(false);
   const [showOR, setShowOR] = useState(false);
   const [showGemma, setShowGemma] = useState(false);
+  const [showOpenAIFallback, setShowOpenAIFallback] = useState(false);
+  const [showORFallback, setShowORFallback] = useState(false);
+  const [showGemmaFallback, setShowGemmaFallback] = useState(false);
+  const [draggingProvider, setDraggingProvider] = useState<Provider | null>(null);
 
   const currentOpenRouterOption = useMemo(() => {
     const curated = [...OPENROUTER_FREE_MODELS, ...OPENROUTER_PAID_MODELS];
@@ -41,23 +47,41 @@ export function SettingsPage() {
   const update = (patch: Partial<Settings>) =>
     dispatch({ type: "SETTINGS_UPDATE", patch });
 
-  const providerCards = [
-    {
-      label: "OpenAI",
-      ready: Boolean(settings.apiKey),
-      body: "Best for text + DALL·E image generation.",
-    },
-    {
-      label: "OpenRouter",
-      ready: Boolean(settings.openrouterKey),
-      body: `Routes through ${settings.openrouterModel.split("/").pop() ?? "selected model"}.`,
-    },
-    {
-      label: "Gemma",
-      ready: Boolean(settings.gemmaKey),
-      body: "Direct Google AI Studio access for Gemma models.",
-    },
-  ];
+  const toLines = (values: string[]) => values.join("\n");
+  const parseLines = (value: string) =>
+    value
+      .split("\n")
+      .map((line) => line.trim())
+      .filter((line, i, arr) => Boolean(line) && arr.indexOf(line) === i);
+
+  const providerReadiness = {
+    openai: Boolean(settings.apiKey || settings.openaiFallbackKeys.length > 0),
+    openrouter: Boolean(settings.openrouterKey || settings.openrouterFallbackKeys.length > 0),
+    gemma: Boolean(settings.gemmaKey || settings.gemmaFallbackKeys.length > 0),
+  };
+
+  const providerNames: Record<Provider, string> = {
+    openai: "OpenAI",
+    openrouter: "OpenRouter",
+    gemma: "Gemma",
+  };
+
+  const moveProviderOrder = (from: Provider, to: Provider) => {
+    if (from === to) return;
+    const order = [...settings.fallbackOrder];
+    const fromIndex = order.indexOf(from);
+    const toIndex = order.indexOf(to);
+    if (fromIndex < 0 || toIndex < 0) return;
+    order.splice(fromIndex, 1);
+    order.splice(toIndex, 0, from);
+    update({ fallbackOrder: order });
+  };
+
+  const providerHintBySelected: Record<Provider, string> = {
+    openai: "Only OpenAI fields are shown while OpenAI is selected.",
+    openrouter: "Only OpenRouter fields are shown while OpenRouter is selected.",
+    gemma: "Only Gemma fields are shown while Gemma is selected.",
+  };
 
   return (
     <div className="page-stack">
@@ -83,22 +107,6 @@ export function SettingsPage() {
           <p className="stat-copy">Activity stored locally.</p>
         </GlassPanel>
       </div>
-
-      <GlassPanel title="Provider Readiness">
-        <div className="provider-grid">
-          {providerCards.map((provider) => (
-            <div key={provider.label} className={`provider-card${provider.ready ? " provider-card--ready" : ""}`}>
-              <div className="provider-card-top">
-                <strong>{provider.label}</strong>
-                <span className={provider.ready ? "badge" : "badge muted"}>
-                  {provider.ready ? "Ready" : "Missing key"}
-                </span>
-              </div>
-              <p>{provider.body}</p>
-            </div>
-          ))}
-        </div>
-      </GlassPanel>
 
       <GlassPanel title="General">
         <div className="form-grid">
@@ -136,8 +144,17 @@ export function SettingsPage() {
         </div>
       </GlassPanel>
 
-      <GlassPanel title="AI Provider">
+      <GlassPanel title="AI Provider (Unified)">
         <div className="form-grid">
+          <label>
+            Provider readiness
+            <div style={{ display: "flex", gap: "0.45rem", flexWrap: "wrap", marginTop: "0.45rem" }}>
+              <span className={providerReadiness.openai ? "badge" : "badge muted"}>OpenAI {providerReadiness.openai ? "Ready" : "Missing"}</span>
+              <span className={providerReadiness.openrouter ? "badge" : "badge muted"}>OpenRouter {providerReadiness.openrouter ? "Ready" : "Missing"}</span>
+              <span className={providerReadiness.gemma ? "badge" : "badge muted"}>Gemma {providerReadiness.gemma ? "Ready" : "Missing"}</span>
+            </div>
+          </label>
+
           <label>
             Active provider
             <select
@@ -148,99 +165,200 @@ export function SettingsPage() {
               <option value="openrouter">OpenRouter (access 300+ models)</option>
               <option value="gemma">Google AI Studio (Gemma direct)</option>
             </select>
+            <p className="input-hint">{providerHintBySelected[settings.provider]}</p>
           </label>
 
-          {/* OpenAI key */}
-          <label>
-            OpenAI API Key
-            <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
-              <input
-                type={showOpenAI ? "text" : "password"}
-                placeholder="sk-..."
-                value={settings.apiKey}
-                onChange={(e) => update({ apiKey: e.target.value })}
-                autoComplete="off"
-                spellCheck={false}
-                style={{ flex: 1 }}
-              />
-              <button type="button" className="text-button" onClick={() => setShowOpenAI((v) => !v)} style={{ flexShrink: 0 }}>
-                {showOpenAI ? "Hide" : "Show"}
-              </button>
-            </div>
-            <p className="input-hint">
-              Required for OpenAI provider and Image mode.{" "}
-              <a href="https://platform.openai.com/api-keys" target="_blank" rel="noreferrer">Get key ↗</a>
-            </p>
-          </label>
+          {settings.provider === "openai" && (
+            <label>
+              OpenAI API Key
+              <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
+                <input
+                  type={showOpenAI ? "text" : "password"}
+                  placeholder="sk-..."
+                  value={settings.apiKey}
+                  onChange={(e) => update({ apiKey: e.target.value })}
+                  autoComplete="off"
+                  spellCheck={false}
+                  style={{ flex: 1 }}
+                />
+                <button type="button" className="text-button" onClick={() => setShowOpenAI((v) => !v)} style={{ flexShrink: 0 }}>
+                  {showOpenAI ? "Hide" : "Show"}
+                </button>
+              </div>
+              <p className="input-hint">
+                Required for OpenAI provider and Image mode. <a href="https://platform.openai.com/api-keys" target="_blank" rel="noreferrer">Get key ↗</a>
+              </p>
+            </label>
+          )}
 
-          {/* OpenRouter key */}
-          <label>
-            OpenRouter API Key
-            <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
-              <input
-                type={showOR ? "text" : "password"}
-                placeholder="sk-or-..."
-                value={settings.openrouterKey}
-                onChange={(e) => update({ openrouterKey: e.target.value })}
-                autoComplete="off"
-                spellCheck={false}
-                style={{ flex: 1 }}
-              />
-              <button type="button" className="text-button" onClick={() => setShowOR((v) => !v)} style={{ flexShrink: 0 }}>
-                {showOR ? "Hide" : "Show"}
-              </button>
-            </div>
-            <p className="input-hint">
-              <a href="https://openrouter.ai/keys" target="_blank" rel="noreferrer">Get key at openrouter.ai ↗</a>
-            </p>
-          </label>
+          {settings.provider === "openrouter" && (
+            <>
+              <label>
+                OpenRouter API Key
+                <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
+                  <input
+                    type={showOR ? "text" : "password"}
+                    placeholder="sk-or-..."
+                    value={settings.openrouterKey}
+                    onChange={(e) => update({ openrouterKey: e.target.value })}
+                    autoComplete="off"
+                    spellCheck={false}
+                    style={{ flex: 1 }}
+                  />
+                  <button type="button" className="text-button" onClick={() => setShowOR((v) => !v)} style={{ flexShrink: 0 }}>
+                    {showOR ? "Hide" : "Show"}
+                  </button>
+                </div>
+                <p className="input-hint"><a href="https://openrouter.ai/keys" target="_blank" rel="noreferrer">Get key at openrouter.ai ↗</a></p>
+              </label>
 
-          {/* OpenRouter model picker */}
+              <label>
+                OpenRouter model
+                <select
+                  value={settings.openrouterModel}
+                  onChange={(e) => update({ openrouterModel: e.target.value })}
+                >
+                  {currentOpenRouterOption && (
+                    <option value={currentOpenRouterOption.value}>{currentOpenRouterOption.label}</option>
+                  )}
+                  <optgroup label="Free Models">
+                    {OPENROUTER_FREE_MODELS.map((m) => (
+                      <option key={m.value} value={m.value}>{m.label}</option>
+                    ))}
+                  </optgroup>
+                  <optgroup label="Paid Models">
+                    {OPENROUTER_PAID_MODELS.map((m) => (
+                      <option key={m.value} value={m.value}>{m.label}</option>
+                    ))}
+                  </optgroup>
+                </select>
+                <p className="input-hint">Five curated free models first, then top paid models.</p>
+              </label>
+            </>
+          )}
+
+          {settings.provider === "gemma" && (
+            <label>
+              Google AI Studio Key (Gemma)
+              <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
+                <input
+                  type={showGemma ? "text" : "password"}
+                  placeholder="AIza..."
+                  value={settings.gemmaKey}
+                  onChange={(e) => update({ gemmaKey: e.target.value })}
+                  autoComplete="off"
+                  spellCheck={false}
+                  style={{ flex: 1 }}
+                />
+                <button type="button" className="text-button" onClick={() => setShowGemma((v) => !v)} style={{ flexShrink: 0 }}>
+                  {showGemma ? "Hide" : "Show"}
+                </button>
+              </div>
+              <p className="input-hint">
+                Runs Gemma via Google AI Studio. <a href="https://aistudio.google.com/apikey" target="_blank" rel="noreferrer">Get key ↗</a>
+              </p>
+            </label>
+          )}
+
           <label>
-            OpenRouter model
+            Experimental fallback mode
             <select
-              value={settings.openrouterModel}
-              onChange={(e) => update({ openrouterModel: e.target.value })}
+              value={settings.experimentalFallback ? "on" : "off"}
+              onChange={(e) => {
+                const enabled = e.target.value === "on";
+                update({
+                  experimentalFallback: enabled,
+                  providerRouting: enabled ? "hybrid" : settings.providerRouting,
+                });
+              }}
             >
-              {currentOpenRouterOption && (
-                <option value={currentOpenRouterOption.value}>{currentOpenRouterOption.label}</option>
-              )}
-              <optgroup label="Free Models">
-                {OPENROUTER_FREE_MODELS.map((m) => (
-                  <option key={m.value} value={m.value}>{m.label}</option>
-                ))}
-              </optgroup>
-              <optgroup label="Paid Models">
-                {OPENROUTER_PAID_MODELS.map((m) => (
-                  <option key={m.value} value={m.value}>{m.label}</option>
-                ))}
-              </optgroup>
+              <option value="off">Off</option>
+              <option value="on">On (multi-key + cross-provider fallback)</option>
             </select>
-            <p className="input-hint">Five curated free models first, then the top five commonly used paid models.</p>
           </label>
 
-          {/* Google AI Studio / Gemma key */}
-          <label>
-            Google AI Studio Key (Gemma)
-            <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
-              <input
-                type={showGemma ? "text" : "password"}
-                placeholder="AIza..."
-                value={settings.gemmaKey}
-                onChange={(e) => update({ gemmaKey: e.target.value })}
-                autoComplete="off"
-                spellCheck={false}
-                style={{ flex: 1 }}
-              />
-              <button type="button" className="text-button" onClick={() => setShowGemma((v) => !v)} style={{ flexShrink: 0 }}>
-                {showGemma ? "Hide" : "Show"}
-              </button>
+          {settings.experimentalFallback && (
+            <div style={{ gridColumn: "1 / -1", display: "grid", gap: "0.8rem" }}>
+              <div>
+                <strong style={{ fontSize: "0.86rem", color: "var(--ink-main)" }}>Fallback order (drag to reorder)</strong>
+                <div style={{ display: "flex", gap: "0.45rem", flexWrap: "wrap", marginTop: "0.55rem" }}>
+                  {settings.fallbackOrder.map((provider) => (
+                    <button
+                      key={provider}
+                      type="button"
+                      className="chip"
+                      draggable
+                      onDragStart={() => setDraggingProvider(provider)}
+                      onDragOver={(e) => e.preventDefault()}
+                      onDrop={() => {
+                        if (draggingProvider) {
+                          moveProviderOrder(draggingProvider, provider);
+                        }
+                        setDraggingProvider(null);
+                      }}
+                    >
+                      {providerNames[provider]}
+                    </button>
+                  ))}
+                </div>
+                <p className="input-hint">Primary provider is always tried first, then this order.</p>
+              </div>
+
+              <div className="form-grid">
+                <label>
+                  OpenAI fallback keys (one per line)
+                  <textarea
+                    rows={3}
+                    value={toLines(settings.openaiFallbackKeys)}
+                    onChange={(e) => update({ openaiFallbackKeys: parseLines(e.target.value) })}
+                    placeholder="sk-..."
+                  />
+                  <button type="button" className="text-button" onClick={() => setShowOpenAIFallback((v) => !v)}>
+                    {showOpenAIFallback ? "Hide" : "Show"} values
+                  </button>
+                  {showOpenAIFallback && <p className="input-hint">{toLines(settings.openaiFallbackKeys) || "No fallback keys added."}</p>}
+                </label>
+
+                <label>
+                  OpenRouter fallback keys (one per line)
+                  <textarea
+                    rows={3}
+                    value={toLines(settings.openrouterFallbackKeys)}
+                    onChange={(e) => update({ openrouterFallbackKeys: parseLines(e.target.value) })}
+                    placeholder="sk-or-..."
+                  />
+                  <button type="button" className="text-button" onClick={() => setShowORFallback((v) => !v)}>
+                    {showORFallback ? "Hide" : "Show"} values
+                  </button>
+                  {showORFallback && <p className="input-hint">{toLines(settings.openrouterFallbackKeys) || "No fallback keys added."}</p>}
+                </label>
+
+                <label>
+                  Gemma fallback keys (one per line)
+                  <textarea
+                    rows={3}
+                    value={toLines(settings.gemmaFallbackKeys)}
+                    onChange={(e) => update({ gemmaFallbackKeys: parseLines(e.target.value) })}
+                    placeholder="AIza..."
+                  />
+                  <button type="button" className="text-button" onClick={() => setShowGemmaFallback((v) => !v)}>
+                    {showGemmaFallback ? "Hide" : "Show"} values
+                  </button>
+                  {showGemmaFallback && <p className="input-hint">{toLines(settings.gemmaFallbackKeys) || "No fallback keys added."}</p>}
+                </label>
+
+                <label>
+                  OpenRouter fallback models (one per line)
+                  <textarea
+                    rows={3}
+                    value={toLines(settings.openrouterFallbackModels)}
+                    onChange={(e) => update({ openrouterFallbackModels: parseLines(e.target.value) })}
+                    placeholder="meta-llama/llama-3.2-3b-instruct:free"
+                  />
+                </label>
+              </div>
             </div>
-            <p className="input-hint">
-              Runs Gemma 3 27B via Google AI Studio.{" "}
-              <a href="https://aistudio.google.com/apikey" target="_blank" rel="noreferrer">Get key ↗</a>
-            </p>
-          </label>
+          )}
 
           <p className="input-hint" style={{ gridColumn: "1 / -1", marginTop: "0.25rem" }}>
             All keys are stored locally in your browser and never sent to any server other than the selected provider.
@@ -250,18 +368,6 @@ export function SettingsPage() {
 
       <GlassPanel title="Advanced">
         <div className="form-grid">
-          <label>
-            Provider routing
-            <select
-              value={settings.providerRouting}
-              onChange={(e) =>
-                update({ providerRouting: e.target.value as Settings["providerRouting"] })
-              }
-            >
-              <option value="single">Single provider</option>
-              <option value="hybrid">Hybrid provider fallback</option>
-            </select>
-          </label>
           <label>
             Experimental image pipeline
             <select

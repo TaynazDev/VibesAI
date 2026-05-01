@@ -377,17 +377,25 @@ body {
   left: 52px;
   top: 50vh;
   z-index: 50;
-  width: 0;
-  height: 0;
+  width: 84px;
+  height: 78vh;
+  transform: translateY(-50%);
   overflow: visible;
-  pointer-events: none;
+  pointer-events: all;
+  touch-action: none;
+  cursor: grab;
+  user-select: none;
+}
+
+.dial-layer.dragging {
+  cursor: grabbing;
 }
 
 /* Each circle button */
 .dial-btn {
   position: absolute;
   left: 0;
-  top: 0;
+  top: 50%;
   width: 46px;
   height: 46px;
   border-radius: 50%;
@@ -2219,6 +2227,20 @@ select:focus {
 .plan-edit-form textarea:focus,
 .plan-edit-form select:focus {
   border-color: var(--accent);
+}
+
+/* iOS Safari zoom fix: keep editable controls at 16px so focus doesn't auto-zoom */
+@supports (-webkit-touch-callout: none) {
+  input,
+  textarea,
+  select,
+  .prompt-input,
+  .chat-input,
+  .plan-desc-input,
+  .search-input,
+  .ai-chat-history-select {
+    font-size: 16px !important;
+  }
 }
 
 .status.simple { color: var(--success); }

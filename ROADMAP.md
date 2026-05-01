@@ -21,12 +21,6 @@ Connect VibesAI to third-party tools.
 - Slack: run prompts from a slash command
 - Needs: OAuth flow, webhook endpoints, settings page per integration
 
-### 🎙️ Voice Input
-Real-time speech-to-text into the prompt composer.
-- Use OpenAI Whisper API (`/audio/transcriptions`) or browser `SpeechRecognition`
-- Mic button in the bar-footer, live transcript displayed as user types
-- Needs: browser permission handling, visual waveform feedback
-
 ### 🤖 Custom AI Agents
 Build and save reusable agents with a system prompt, tools, tone, and persona.
 - Agent builder page (new route `/agents`)
@@ -54,13 +48,6 @@ Edit generated or uploaded images.
 - Style transfer: describe a new style and re-apply
 - Needs: canvas component, mask drawing tool, DALL·E edits/variations API calls
 
-### 📊 Analytics Dashboard
-Usage stats and cost tracking.
-- Token usage per request (from OpenAI API response `usage` field)
-- Cumulative cost estimate (based on model pricing)
-- Chart: requests over time, mode breakdown, avg prompt length
-- Needs: persist usage in state/localStorage, charting library (e.g. Recharts), `/analytics` route
-
 ### 🔒 Team Workspaces
 Multi-user support.
 - Invite team members by email
@@ -74,12 +61,40 @@ Multi-user support.
 
 > Ideas that haven't been added to the UI yet. Add freely.
 
+### 🚀 Priority Feature Drops (added 2026-04-26)
+
+- **Screenshot-to-app** *(Killer feature)*
+  - User uploads a screenshot/photo of any UI (napkin sketch, competitor app, Figma frame) and VibesAI recreates it as working code.
+  - Suggested approach: Claude vision + structured UI extraction + code generation pass + editable component output.
+  - How to build this ↗: add image upload entry point in Builder, run vision-to-layout parser, map to component primitives, then run a refinement pass.
+
+- **Multiplayer / collab mode** *(V2 feature)*
+  - Two people in the same project, both typing prompts, watching preview updates live (Google Docs-style vibe-coding).
+  - Suggested sync layer: Supabase Realtime or Liveblocks.
+  - First milestone: presence + shared prompt timeline + conflict-safe project state merges.
+
+- **VibesAI marketplace** *(Monetization unlock)*
+  - Users sell deployed apps/templates to other VibesAI users.
+  - Seller receives revenue share; buyer gets one-tap clone into workspace.
+  - Plan this out ↗: listing model, moderation/review flow, payments + payout rails, licensing and clone attribution.
+
+- **AI component library** *(V1 stretch goal)*
+  - Let users build a personal reusable component library (nav bars, cards, modals) that future prompts can reference.
+  - Core UX: "Use my card component" and "save this block to my library".
+  - First milestone: component save/extract + tagging + retrieval in prompt context.
+
+- **Prompt history & favourites** *(Easy win)*
+  - Save every prompt ever typed, allow starring best prompts, reuse across projects, and share prompt packs.
+  - Product angle: prompts become reusable assets users care about.
+  - First milestone: history timeline + favorites filter + one-click re-run.
+
+- **Export to GitHub** *(Indie dev magnet)*
+  - One tap creates a new GitHub repo, commits generated code, and pushes.
+  - Bridges vibe-coding to real developer workflow.
+  - First milestone: GitHub OAuth + repo create + initial commit + push + success URL handoff.
+
 ### 🔴 Now
 
-- **Usage page** with charts and cost tracking
-- **AI Critic Pass** — second-pass scoring for UX, accessibility, and performance with one-click fixes.
-- **Time Travel Editor** — visual timeline with snapshot rollback.
-- **Release Readiness Score** — final score + checklist for UX/a11y/responsive/perf.
 - **VibesAI Visual Identity Pass** — refine this app's own look to feel more premium and distinct.
   - Improve left-side/nav readability and hierarchy while keeping the signature look keep the most relevant in the middle and as you go down or up the list the items get less relevant. This way it guides the eye to the most important items first.
   - Tighten spacing rhythm and panel balance across Builder, Projects, Settings, and Account.
@@ -102,7 +117,6 @@ Multi-user support.
 ### 🟠 Next
 
 - **Component Locking** — lock sections so AI can't change protected blocks.
-- **Screenshot-to-UI Rebuild** — upload screenshot and rebuild editable interface.
 - **Business Logic Wizard** — guided setup for rules, permissions, workflows.
 - **Prompt-to-Database Schema** — derive entities and relations from prompt.
 - **API Connection Mapper** — scaffold endpoint wiring + loading/error/auth states.
@@ -122,8 +136,6 @@ Multi-user support.
   - **Competitive Clone Mode** — inspired layout/interaction recreation from URLs.
 - **User Journey Simulator** — persona-based friction analysis.
 - **Collaboration Review Links** — comment-on-preview collaboration links.
-- **Collaborative sessions** — real-time co-editing via WebSocket.
-- **Template Marketplace** — community templates and blueprints.
 - **Persona-Based Style Packs** — predefined vertical-specific style archetypes.
 - **Design Tokens Export** — export full theme tokens (CSS vars / JSON) for reuse across projects.
 - **Typography Pairing Engine** — AI suggests and applies balanced heading/body font pairs per brand tone.
@@ -162,3 +174,8 @@ Multi-user support.
 - **Diff view** — before/after code diff in the builder preview panel (toggle ⊟ Diff button)
 - **Streaming responses** — live token streaming with partial message preview and blinking cursor
 - **Speech-to-Text** — mic button in builder and AI Chat inputs using browser SpeechRecognition API
+- **Usage Analytics Dashboard** — `/analytics` route with charts, filters, model breakdown, CSV/JSON export
+- **AI Critic Pass** — modal scoring UX/A11y/Performance with issue surfacing
+- **Time Travel Snapshots** — snapshot creation, restore, and delete for builder states
+- **Release Readiness Score** — readiness modal with overall score and deployment signal
+- **Visual Polish Pass** — UI refinement suggestions and polish scoring in builder

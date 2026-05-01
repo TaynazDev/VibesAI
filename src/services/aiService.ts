@@ -15,11 +15,24 @@ export type AIResult = AITextResult | AIImageResult;
 
 const STORAGE_KEY = "vibesai_state_v1";
 
+const OPENROUTER_FALLBACK_MODELS = [
+  "google/gemma-2-9b-it:free",
+  "meta-llama/llama-3.2-3b-instruct:free",
+  "mistralai/mistral-7b-instruct:free",
+];
+
 type StoredSettings = {
   apiKey?: string;
   provider?: "openai" | "openrouter" | "gemma";
+  providerRouting?: "single" | "hybrid";
+  experimentalFallback?: boolean;
+  fallbackOrder?: Array<"openai" | "openrouter" | "gemma">;
   openrouterKey?: string;
   openrouterModel?: string;
+  openrouterFallbackModels?: string[];
+  openaiFallbackKeys?: string[];
+  openrouterFallbackKeys?: string[];
+  gemmaFallbackKeys?: string[];
   gemmaKey?: string;
 };
 
@@ -32,6 +45,61 @@ function getSettings(): StoredSettings {
   } catch {
     return {};
   }
+}
+
+function openRouterReferer(): string {
+  try {
+    return window.location.origin;
+  } catch {
+    return "https://vibesai.app";
+  }
+}
+
+function buildOpenRouterModelOrder(primaryModel: string): string[] {
+  return [primaryModel, ...OPENROUTER_FALLBACK_MODELS]
+    .map((m) => m.trim())
+    .filter((m, i, arr) => Boolean(m) && arr.indexOf(m) === i);
+}
+
+function buildOpenRouterModelOrderWithExtras(primaryModel: string, extras?: string[]): string[] {
+  return [primaryModel, ...(extras ?? []), ...OPENROUTER_FALLBACK_MODELS]
+    .map((m) => m.trim())
+    .filter((m, i, arr) => Boolean(m) && arr.indexOf(m) === i);
+}
+
+function cleanedKeys(primary: string | undefined, extras?: string[]): string[] {
+  return [primary ?? "", ...(extras ?? [])]
+    .map((v) => v.trim())
+    .filter((v, i, arr) => Boolean(v) && arr.indexOf(v) === i);
+}
+
+function buildProviderOrder(settings: StoredSettings): Array<"openai" | "openrouter" | "gemma"> {
+  const selected = settings.provider ?? "openai";
+  const defaultOrder: Array<"openai" | "openrouter" | "gemma"> = [selected, "openai", "openrouter", "gemma"]
+    .filter((p, i, arr) => arr.indexOf(p) === i) as Array<"openai" | "openrouter" | "gemma">;
+
+  const fallbackEnabled = settings.providerRouting === "hybrid" || settings.experimentalFallback;
+  if (!fallbackEnabled) {
+    return [selected];
+  }
+
+  const configured = (settings.fallbackOrder ?? []).filter(
+    (p): p is "openai" | "openrouter" | "gemma" => p === "openai" || p === "openrouter" || p === "gemma"
+  );
+  if (settings.experimentalFallback && configured.length > 0) {
+    return [selected, ...configured].filter((p, i, arr) => arr.indexOf(p) === i);
+  }
+  return defaultOrder;
+}
+
+function isOpenRouterEndpointPolicyError(message: string): boolean {
+  const m = message.toLowerCase();
+  return (
+    m.includes("no endpoints available") ||
+    m.includes("guardrail") ||
+    m.includes("data policy") ||
+    m.includes("privacy")
+  );
 }
 
 const lengthSystemSuffix: Record<AIOptions["length"], string> = {
@@ -96,28 +164,88 @@ async function runOpenRouter(mode: AIMode, prompt: string, opts: AIOptions, key:
     throw new Error("Image generation requires an OpenAI key. Switch provider to OpenAI for this mode.");
   }
 
-  const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${key}`,
-      "HTTP-Referer": "https://vibesai.app",
-      "X-Title": "VibesAI",
-    },
-    body: JSON.stringify({
-      model,
-      temperature: opts.creativity / 100,
-      max_tokens: maxTokens(opts.length),
-      messages: [
-        { role: "system", content: buildSystemPrompt(mode, opts) },
-        { role: "user", content: prompt },
-      ],
-    }),
-  });
-  const json = await res.json();
-  if (!res.ok) throw new Error(json?.error?.message ?? "OpenRouter request failed.");
-  const content: string = json.choices[0].message.content ?? "";
-  return { type: "text", content, wordCount: content.split(/\s+/).filter(Boolean).length };
+  const modelCandidates = buildOpenRouterModelOrder(model);
+  for (let i = 0; i < modelCandidates.length; i++) {
+    const candidateModel = modelCandidates[i];
+    const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${key}`,
+        "HTTP-Referer": openRouterReferer(),
+        "X-Title": "VibesAI",
+      },
+      body: JSON.stringify({
+        model: candidateModel,
+        temperature: opts.creativity / 100,
+        max_tokens: maxTokens(opts.length),
+        messages: [
+          { role: "system", content: buildSystemPrompt(mode, opts) },
+          { role: "user", content: prompt },
+        ],
+      }),
+    });
+    const json = await res.json();
+    if (!res.ok) {
+      const errMsg = (json?.error?.message ?? "OpenRouter request failed.") as string;
+      if (i < modelCandidates.length - 1 && isOpenRouterEndpointPolicyError(errMsg)) {
+        continue;
+      }
+      throw new Error(errMsg);
+    }
+    const content: string = json.choices[0].message.content ?? "";
+    return { type: "text", content, wordCount: content.split(/\s+/).filter(Boolean).length };
+  }
+
+  throw new Error("OpenRouter request failed.");
+}
+
+async function runOpenRouterWithExtras(
+  mode: AIMode,
+  prompt: string,
+  opts: AIOptions,
+  key: string,
+  model: string,
+  extraModels?: string[],
+): Promise<AIResult> {
+  if (mode === "Image") {
+    throw new Error("Image generation requires an OpenAI key. Switch provider to OpenAI for this mode.");
+  }
+
+  const modelCandidates = buildOpenRouterModelOrderWithExtras(model, extraModels);
+  for (let i = 0; i < modelCandidates.length; i++) {
+    const candidateModel = modelCandidates[i];
+    const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${key}`,
+        "HTTP-Referer": openRouterReferer(),
+        "X-Title": "VibesAI",
+      },
+      body: JSON.stringify({
+        model: candidateModel,
+        temperature: opts.creativity / 100,
+        max_tokens: maxTokens(opts.length),
+        messages: [
+          { role: "system", content: buildSystemPrompt(mode, opts) },
+          { role: "user", content: prompt },
+        ],
+      }),
+    });
+    const json = await res.json();
+    if (!res.ok) {
+      const errMsg = (json?.error?.message ?? "OpenRouter request failed.") as string;
+      if (i < modelCandidates.length - 1 && isOpenRouterEndpointPolicyError(errMsg)) {
+        continue;
+      }
+      throw new Error(errMsg);
+    }
+    const content: string = json.choices[0].message.content ?? "";
+    return { type: "text", content, wordCount: content.split(/\s+/).filter(Boolean).length };
+  }
+
+  throw new Error("OpenRouter request failed.");
 }
 
 // ── Google AI Studio (Gemma) ──────────────────────────────────────────────
@@ -155,9 +283,7 @@ async function runGemma(mode: AIMode, prompt: string, opts: AIOptions, key: stri
 // ── Public entry point ────────────────────────────────────────────────────
 export async function runAI(mode: AIMode, prompt: string, opts: AIOptions): Promise<AIResult> {
   const s = getSettings();
-  const provider = s.provider ?? "openai";
-  const providerOrder = ([provider, "openai", "openrouter", "gemma"] as const)
-    .filter((p, i, arr) => arr.indexOf(p) === i);
+  const providerOrder = buildProviderOrder(s);
 
   let sawUsableKey = false;
   let lastError: Error | null = null;
@@ -165,24 +291,98 @@ export async function runAI(mode: AIMode, prompt: string, opts: AIOptions): Prom
   for (const candidate of providerOrder) {
     try {
       if (candidate === "openai") {
-        const key = s.apiKey?.trim() ?? "";
-        if (!key) continue;
-        sawUsableKey = true;
-        return await runOpenAI(mode, prompt, opts, key);
+        const keys = cleanedKeys(s.apiKey, s.experimentalFallback ? s.openaiFallbackKeys : undefined);
+        if (keys.length === 0) continue;
+        for (const key of keys) {
+          try {
+            sawUsableKey = true;
+            return await runOpenAI(mode, prompt, opts, key);
+          } catch (err: unknown) {
+            const e = err instanceof Error ? err : new Error("AI request failed.");
+            const m = e.message.toLowerCase();
+            const retriableAuthError =
+              m.includes("no_api_key") ||
+              m.includes("no api key") ||
+              m.includes("unauthorized") ||
+              m.includes("invalid api key") ||
+              m.includes("invalid authentication") ||
+              m.includes("401") ||
+              m.includes("403") ||
+              m.includes("429") ||
+              m.includes("overloaded") ||
+              m.includes("too many requests");
+            if (!retriableAuthError) throw e;
+            lastError = e;
+          }
+        }
+        continue;
       }
 
       if (candidate === "openrouter") {
-        const key = s.openrouterKey?.trim() ?? "";
-        if (!key) continue;
-        sawUsableKey = true;
-        const model = s.openrouterModel?.trim() || "google/gemma-3-27b-it";
-        return await runOpenRouter(mode, prompt, opts, key, model);
+        const keys = cleanedKeys(s.openrouterKey, s.experimentalFallback ? s.openrouterFallbackKeys : undefined);
+        if (keys.length === 0) continue;
+        for (const key of keys) {
+          try {
+            sawUsableKey = true;
+            const model = s.openrouterModel?.trim() || "google/gemma-3-27b-it";
+            return await runOpenRouterWithExtras(
+              mode,
+              prompt,
+              opts,
+              key,
+              model,
+              s.experimentalFallback ? s.openrouterFallbackModels : undefined,
+            );
+          } catch (err: unknown) {
+            const e = err instanceof Error ? err : new Error("AI request failed.");
+            const m = e.message.toLowerCase();
+            const retriableAuthError =
+              m.includes("no_api_key") ||
+              m.includes("no api key") ||
+              m.includes("unauthorized") ||
+              m.includes("invalid api key") ||
+              m.includes("invalid authentication") ||
+              m.includes("no endpoints available") ||
+              m.includes("guardrail") ||
+              m.includes("data policy") ||
+              m.includes("privacy") ||
+              m.includes("401") ||
+              m.includes("403") ||
+              m.includes("429") ||
+              m.includes("overloaded") ||
+              m.includes("too many requests");
+            if (!retriableAuthError) throw e;
+            lastError = e;
+          }
+        }
+        continue;
       }
 
-      const key = s.gemmaKey?.trim() ?? "";
-      if (!key) continue;
-      sawUsableKey = true;
-      return await runGemma(mode, prompt, opts, key);
+      const keys = cleanedKeys(s.gemmaKey, s.experimentalFallback ? s.gemmaFallbackKeys : undefined);
+      if (keys.length === 0) continue;
+      for (const key of keys) {
+        try {
+          sawUsableKey = true;
+          return await runGemma(mode, prompt, opts, key);
+        } catch (err: unknown) {
+          const e = err instanceof Error ? err : new Error("AI request failed.");
+          const m = e.message.toLowerCase();
+          const retriableAuthError =
+            m.includes("no_api_key") ||
+            m.includes("no api key") ||
+            m.includes("unauthorized") ||
+            m.includes("invalid api key") ||
+            m.includes("invalid authentication") ||
+            m.includes("401") ||
+            m.includes("403") ||
+            m.includes("429") ||
+            m.includes("overloaded") ||
+            m.includes("too many requests");
+          if (!retriableAuthError) throw e;
+          lastError = e;
+        }
+      }
+      continue;
     } catch (err: unknown) {
       const e = err instanceof Error ? err : new Error("AI request failed.");
       const m = e.message.toLowerCase();

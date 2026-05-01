@@ -85,23 +85,29 @@ export function AnalyticsPage() {
 
   // Timeline data (daily)
   const timelineData = useMemo(() => {
-    const days: Record<string, { requests: number; cost: number; tokens: number }> = {};
+    const days: Record<string, { key: number; date: string; requests: number; cost: number; tokens: number }> = {};
     filtered.forEach((u) => {
-      const date = new Date(u.timestamp).toLocaleDateString("en-US", {
+      const dayStart = new Date(u.timestamp);
+      dayStart.setHours(0, 0, 0, 0);
+      const dayKey = dayStart.getTime();
+      const date = dayStart.toLocaleDateString("en-US", {
         month: "short",
         day: "numeric",
       });
-      if (!days[date]) days[date] = { requests: 0, cost: 0, tokens: 0 };
-      days[date].requests++;
-      days[date].cost += u.cost;
-      days[date].tokens += u.inputTokens + u.outputTokens;
+      if (!days[String(dayKey)]) {
+        days[String(dayKey)] = { key: dayKey, date, requests: 0, cost: 0, tokens: 0 };
+      }
+      days[String(dayKey)].requests++;
+      days[String(dayKey)].cost += u.cost;
+      days[String(dayKey)].tokens += u.inputTokens + u.outputTokens;
     });
-    return Object.entries(days)
-      .sort((a, b) => new Date(a[0]).getTime() - new Date(b[0]).getTime())
+    return Object.values(days)
+      .sort((a, b) => a.key - b.key)
       .slice(-30)
-      .map(([date, data]) => ({
-        date,
-        ...data,
+      .map((data) => ({
+        date: data.date,
+        requests: data.requests,
+        tokens: data.tokens,
         cost: parseFloat(data.cost.toFixed(4)),
       }));
   }, [filtered]);
@@ -145,6 +151,15 @@ export function AnalyticsPage() {
           ))}
         </div>
       </div>
+
+      {filtered.length === 0 && (
+        <div className="panel" style={{ textAlign: "center", padding: "1.5rem" }}>
+          <h2 style={{ margin: "0 0 0.5rem", fontSize: "1rem" }}>No usage data for this range</h2>
+          <p style={{ margin: 0, color: "var(--ink-soft)" }}>
+            Try a wider filter like This Month or All Time to see analytics.
+          </p>
+        </div>
+      )}
 
       {/* Key Stats */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: "0.75rem", marginBottom: "1.5rem" }}>

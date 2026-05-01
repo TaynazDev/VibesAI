@@ -8,8 +8,15 @@ const STORAGE_KEY = "vibesai_state_v1";
 type StoredSettings = {
   apiKey?: string;
   provider?: "openai" | "openrouter" | "gemma";
+  providerRouting?: "single" | "hybrid";
+  experimentalFallback?: boolean;
+  fallbackOrder?: Array<"openai" | "openrouter" | "gemma">;
   openrouterKey?: string;
   openrouterModel?: string;
+  openrouterFallbackModels?: string[];
+  openaiFallbackKeys?: string[];
+  openrouterFallbackKeys?: string[];
+  gemmaFallbackKeys?: string[];
   gemmaKey?: string;
 };
 
@@ -39,6 +46,67 @@ function extractJSON(text: string): Record<string, unknown> | null {
 // ── Provider calls ───────────────────────────────────────────────────────
 
 type Msg = { role: string; content: string };
+
+const OPENROUTER_FALLBACK_MODELS = [
+  "google/gemma-2-9b-it:free",
+  "meta-llama/llama-3.2-3b-instruct:free",
+  "mistralai/mistral-7b-instruct:free",
+];
+
+function cleanedKeys(primary: string | undefined, extras?: string[]): string[] {
+  return [primary ?? "", ...(extras ?? [])]
+    .map((v) => v.trim())
+    .filter((v, i, arr) => Boolean(v) && arr.indexOf(v) === i);
+}
+
+function buildProviderOrder(settings: StoredSettings): Array<"openai" | "openrouter" | "gemma"> {
+  const selected = settings.provider ?? "openai";
+  const defaultOrder: Array<"openai" | "openrouter" | "gemma"> = [selected, "openai", "openrouter", "gemma"]
+    .filter((p, i, arr) => arr.indexOf(p) === i) as Array<"openai" | "openrouter" | "gemma">;
+
+  const fallbackEnabled = settings.providerRouting === "hybrid" || settings.experimentalFallback;
+  if (!fallbackEnabled) {
+    return [selected];
+  }
+
+  const configured = (settings.fallbackOrder ?? []).filter(
+    (p): p is "openai" | "openrouter" | "gemma" => p === "openai" || p === "openrouter" || p === "gemma"
+  );
+  if (settings.experimentalFallback && configured.length > 0) {
+    return [selected, ...configured].filter((p, i, arr) => arr.indexOf(p) === i);
+  }
+  return defaultOrder;
+}
+
+function openRouterReferer(): string {
+  try {
+    return window.location.origin;
+  } catch {
+    return "https://vibesai.app";
+  }
+}
+
+function buildOpenRouterModelOrder(primaryModel: string): string[] {
+  return [primaryModel, ...OPENROUTER_FALLBACK_MODELS]
+    .map((m) => m.trim())
+    .filter((m, i, arr) => Boolean(m) && arr.indexOf(m) === i);
+}
+
+function buildOpenRouterModelOrderWithExtras(primaryModel: string, extras?: string[]): string[] {
+  return [primaryModel, ...(extras ?? []), ...OPENROUTER_FALLBACK_MODELS]
+    .map((m) => m.trim())
+    .filter((m, i, arr) => Boolean(m) && arr.indexOf(m) === i);
+}
+
+function isOpenRouterEndpointPolicyError(message: string): boolean {
+  const m = message.toLowerCase();
+  return (
+    m.includes("no endpoints available") ||
+    m.includes("guardrail") ||
+    m.includes("data policy") ||
+    m.includes("privacy")
+  );
+}
 
 async function callOpenAI(messages: Msg[], apiKey: string, signal?: AbortSignal): Promise<string> {
   const res = await fetch("https://api.openai.com/v1/chat/completions", {
@@ -105,60 +173,99 @@ async function streamOpenRouter(
   messages: Msg[],
   apiKey: string,
   model: string,
+  extraModels: string[] | undefined,
   onChunk: (delta: string) => void,
   signal?: AbortSignal,
 ): Promise<string> {
-  const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-    method: "POST",
-    signal,
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${apiKey}`,
-      "HTTP-Referer": "https://vibesai.app",
-      "X-Title": "VibesAI Builder",
-    },
-    body: JSON.stringify({ model, messages, temperature: 0.7, max_tokens: 8000, stream: true }),
-  });
-  if (!res.ok) throw new Error(await res.text());
-  const reader = res.body!.getReader();
-  const decoder = new TextDecoder();
-  let full = "";
-  let buf = "";
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    buf += decoder.decode(value, { stream: true });
-    const lines = buf.split("\n");
-    buf = lines.pop() ?? "";
-    for (const line of lines) {
-      if (!line.startsWith("data: ")) continue;
-      const data = line.slice(6).trim();
-      if (data === "[DONE]") continue;
-      try {
-        const parsed = JSON.parse(data) as { choices: { delta: { content?: string } }[] };
-        const delta = parsed.choices[0]?.delta?.content ?? "";
-        if (delta) { full += delta; onChunk(delta); }
-      } catch { /* skip malformed SSE lines */ }
+  const candidates = buildOpenRouterModelOrderWithExtras(model, extraModels);
+
+  for (let i = 0; i < candidates.length; i++) {
+    const candidateModel = candidates[i];
+    const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+      method: "POST",
+      signal,
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+        "HTTP-Referer": openRouterReferer(),
+        "X-Title": "VibesAI Builder",
+      },
+      body: JSON.stringify({ model: candidateModel, messages, temperature: 0.7, max_tokens: 8000, stream: true }),
+    });
+    if (!res.ok) {
+      const errText = await res.text();
+      if (i < candidates.length - 1 && isOpenRouterEndpointPolicyError(errText)) {
+        continue;
+      }
+      throw new Error(errText);
     }
+
+    const reader = res.body!.getReader();
+    const decoder = new TextDecoder();
+    let full = "";
+    let buf = "";
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += decoder.decode(value, { stream: true });
+      const lines = buf.split("\n");
+      buf = lines.pop() ?? "";
+      for (const line of lines) {
+        if (!line.startsWith("data: ")) continue;
+        const data = line.slice(6).trim();
+        if (data === "[DONE]") continue;
+        try {
+          const parsed = JSON.parse(data) as { choices: { delta: { content?: string } }[] };
+          const delta = parsed.choices[0]?.delta?.content ?? "";
+          if (delta) {
+            full += delta;
+            onChunk(delta);
+          }
+        } catch {
+          /* skip malformed SSE lines */
+        }
+      }
+    }
+    return full;
   }
-  return full;
+
+  throw new Error("OpenRouter request failed.");
 }
 
-async function callOpenRouter(messages: Msg[], apiKey: string, model: string, signal?: AbortSignal): Promise<string> {
-  const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-    method: "POST",
-    signal,
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${apiKey}`,
-      "HTTP-Referer": "https://vibesai.app",
-      "X-Title": "VibesAI Builder",
-    },
-    body: JSON.stringify({ model, messages, temperature: 0.7, max_tokens: 8000 }),
-  });
-  if (!res.ok) throw new Error(await res.text());
-  const data = await res.json() as { choices: { message: { content: string } }[] };
-  return data.choices[0].message.content ?? "";
+async function callOpenRouter(
+  messages: Msg[],
+  apiKey: string,
+  model: string,
+  extraModels: string[] | undefined,
+  signal?: AbortSignal,
+): Promise<string> {
+  const candidates = buildOpenRouterModelOrderWithExtras(model, extraModels);
+
+  for (let i = 0; i < candidates.length; i++) {
+    const candidateModel = candidates[i];
+    const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+      method: "POST",
+      signal,
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+        "HTTP-Referer": openRouterReferer(),
+        "X-Title": "VibesAI Builder",
+      },
+      body: JSON.stringify({ model: candidateModel, messages, temperature: 0.7, max_tokens: 8000 }),
+    });
+    if (!res.ok) {
+      const errText = await res.text();
+      if (i < candidates.length - 1 && isOpenRouterEndpointPolicyError(errText)) {
+        continue;
+      }
+      throw new Error(errText);
+    }
+    const data = await res.json() as { choices: { message: { content: string } }[] };
+    return data.choices[0].message.content ?? "";
+  }
+
+  throw new Error("OpenRouter request failed.");
 }
 
 async function callGemma(systemPrompt: string, history: Msg[], apiKey: string, signal?: AbortSignal): Promise<string> {
@@ -221,11 +328,8 @@ function isRetriableBuilderError(message: string): boolean {
 
 async function callAI(systemPrompt: string, history: Msg[], signal?: AbortSignal): Promise<string> {
   const s = getSettings();
-  const provider = s.provider ?? "openai";
   const messages: Msg[] = [{ role: "system", content: systemPrompt }, ...history];
-
-  const providerOrder = ([provider, "openai", "openrouter", "gemma"] as const)
-    .filter((p, i, arr) => arr.indexOf(p) === i);
+  const providerOrder = buildProviderOrder(s);
 
   let sawUsableKey = false;
   let lastError: Error | null = null;
@@ -233,23 +337,58 @@ async function callAI(systemPrompt: string, history: Msg[], signal?: AbortSignal
   for (const candidate of providerOrder) {
     try {
       if (candidate === "openai") {
-        const key = s.apiKey?.trim() ?? "";
-        if (!key) continue;
-        sawUsableKey = true;
-        return await callOpenAI(messages, key, signal);
+        const keys = cleanedKeys(s.apiKey, s.experimentalFallback ? s.openaiFallbackKeys : undefined);
+        if (keys.length === 0) continue;
+        for (const key of keys) {
+          try {
+            sawUsableKey = true;
+            return await callOpenAI(messages, key, signal);
+          } catch (error: unknown) {
+            const e = normalizeBuilderError(error);
+            if (e.name === "AbortError") throw e;
+            if (!isRetriableBuilderError(e.message)) throw e;
+            lastError = e;
+          }
+        }
+        continue;
       }
 
       if (candidate === "openrouter") {
-        const key = s.openrouterKey?.trim() ?? "";
-        if (!key) continue;
-        sawUsableKey = true;
-        return await callOpenRouter(messages, key, s.openrouterModel ?? "google/gemma-3-27b-it", signal);
+        const keys = cleanedKeys(s.openrouterKey, s.experimentalFallback ? s.openrouterFallbackKeys : undefined);
+        if (keys.length === 0) continue;
+        for (const key of keys) {
+          try {
+            sawUsableKey = true;
+            return await callOpenRouter(
+              messages,
+              key,
+              s.openrouterModel ?? "google/gemma-3-27b-it",
+              s.experimentalFallback ? s.openrouterFallbackModels : undefined,
+              signal,
+            );
+          } catch (error: unknown) {
+            const e = normalizeBuilderError(error);
+            if (e.name === "AbortError") throw e;
+            if (!isRetriableBuilderError(e.message)) throw e;
+            lastError = e;
+          }
+        }
+        continue;
       }
 
-      const key = s.gemmaKey?.trim() ?? "";
-      if (!key) continue;
-      sawUsableKey = true;
-      return await callGemma(systemPrompt, history, key, signal);
+      const keys = cleanedKeys(s.gemmaKey, s.experimentalFallback ? s.gemmaFallbackKeys : undefined);
+      if (keys.length === 0) continue;
+      for (const key of keys) {
+        try {
+          sawUsableKey = true;
+          return await callGemma(systemPrompt, history, key, signal);
+        } catch (error: unknown) {
+          const e = normalizeBuilderError(error);
+          if (e.name === "AbortError") throw e;
+          if (!isRetriableBuilderError(e.message)) throw e;
+          lastError = e;
+        }
+      }
     } catch (error: unknown) {
       const e = normalizeBuilderError(error);
       if (e.name === "AbortError") throw e;
@@ -329,11 +468,8 @@ async function callAIStream(
   signal?: AbortSignal,
 ): Promise<string> {
   const s = getSettings();
-  const provider = s.provider ?? "openai";
   const messages: Msg[] = [{ role: "system", content: systemPrompt }, ...history];
-
-  const providerOrder = ([provider, "openai", "openrouter", "gemma"] as const)
-    .filter((p, i, arr) => arr.indexOf(p) === i);
+  const providerOrder = buildProviderOrder(s);
 
   let sawUsableKey = false;
   let lastError: Error | null = null;
@@ -341,24 +477,60 @@ async function callAIStream(
   for (const candidate of providerOrder) {
     try {
       if (candidate === "openai") {
-        const key = s.apiKey?.trim() ?? "";
-        if (!key) continue;
-        sawUsableKey = true;
-        return await streamOpenAI(messages, key, onChunk, signal);
+        const keys = cleanedKeys(s.apiKey, s.experimentalFallback ? s.openaiFallbackKeys : undefined);
+        if (keys.length === 0) continue;
+        for (const key of keys) {
+          try {
+            sawUsableKey = true;
+            return await streamOpenAI(messages, key, onChunk, signal);
+          } catch (error: unknown) {
+            const e = normalizeBuilderError(error);
+            if (e.name === "AbortError") throw e;
+            if (!isRetriableBuilderError(e.message)) throw e;
+            lastError = e;
+          }
+        }
+        continue;
       }
       if (candidate === "openrouter") {
-        const key = s.openrouterKey?.trim() ?? "";
-        if (!key) continue;
-        sawUsableKey = true;
-        return await streamOpenRouter(messages, key, s.openrouterModel ?? "google/gemma-3-27b-it", onChunk, signal);
+        const keys = cleanedKeys(s.openrouterKey, s.experimentalFallback ? s.openrouterFallbackKeys : undefined);
+        if (keys.length === 0) continue;
+        for (const key of keys) {
+          try {
+            sawUsableKey = true;
+            return await streamOpenRouter(
+              messages,
+              key,
+              s.openrouterModel ?? "google/gemma-3-27b-it",
+              s.experimentalFallback ? s.openrouterFallbackModels : undefined,
+              onChunk,
+              signal,
+            );
+          } catch (error: unknown) {
+            const e = normalizeBuilderError(error);
+            if (e.name === "AbortError") throw e;
+            if (!isRetriableBuilderError(e.message)) throw e;
+            lastError = e;
+          }
+        }
+        continue;
       }
       // Gemma doesn't support SSE the same way — fall back to non-streaming
-      const key = s.gemmaKey?.trim() ?? "";
-      if (!key) continue;
-      sawUsableKey = true;
-      const result = await callGemma(systemPrompt, history, key, signal);
-      onChunk(result);
-      return result;
+      const keys = cleanedKeys(s.gemmaKey, s.experimentalFallback ? s.gemmaFallbackKeys : undefined);
+      if (keys.length === 0) continue;
+      for (const key of keys) {
+        try {
+          sawUsableKey = true;
+          const result = await callGemma(systemPrompt, history, key, signal);
+          onChunk(result);
+          return result;
+        } catch (error: unknown) {
+          const e = normalizeBuilderError(error);
+          if (e.name === "AbortError") throw e;
+          if (!isRetriableBuilderError(e.message)) throw e;
+          lastError = e;
+        }
+      }
     } catch (error: unknown) {
       const e = normalizeBuilderError(error);
       if (e.name === "AbortError") throw e;

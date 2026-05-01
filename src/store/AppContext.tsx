@@ -45,6 +45,7 @@ export type Settings = {
   workspaceName: string;
   outputStyle: "clean" | "expressive" | "technical";
   providerRouting: "single" | "hybrid";
+  experimentalFallback: boolean;
   experimentalImage: boolean;
   theme: "light" | "dark" | "system";
   /** OpenAI API key */
@@ -55,6 +56,16 @@ export type Settings = {
   openrouterKey: string;
   /** OpenRouter model slug, e.g. "google/gemma-3-27b-it" */
   openrouterModel: string;
+  /** Extra OpenRouter fallback model slugs */
+  openrouterFallbackModels: string[];
+  /** Extra OpenAI keys to try in fallback mode */
+  openaiFallbackKeys: string[];
+  /** Extra OpenRouter keys to try in fallback mode */
+  openrouterFallbackKeys: string[];
+  /** Extra Gemma keys to try in fallback mode */
+  gemmaFallbackKeys: string[];
+  /** Custom fallback provider order used in experimental mode */
+  fallbackOrder: Array<"openai" | "openrouter" | "gemma">;
   /** Google AI Studio key for Gemma direct access */
   gemmaKey: string;
 };
@@ -116,12 +127,18 @@ const defaultSettings: Settings = {
   workspaceName: "My Workspace",
   outputStyle: "clean",
   providerRouting: "single",
+  experimentalFallback: false,
   experimentalImage: false,
   theme: "system",
   apiKey: "",
   provider: "openai",
   openrouterKey: "",
-  openrouterModel: "google/gemma-3-27b-it",
+  openrouterModel: "google/gemma-2-9b-it:free",
+  openrouterFallbackModels: [],
+  openaiFallbackKeys: [],
+  openrouterFallbackKeys: [],
+  gemmaFallbackKeys: [],
+  fallbackOrder: ["openai", "openrouter", "gemma"],
   gemmaKey: "",
 };
 
